@@ -1,0 +1,35 @@
+dist
+node_modules
+build
+.env
+.env.local
+.DS_Store
+*.log
+release/
+
+# Server
+server/node_modules
+server/dist
+
+# AI
+ai/__pycache__
+ai/**/__pycache__
+ai/.venv
+ai/*.pyc
+
+# Data
+data/
+!data/uploads/.gitkeep
+
+# Electron
+electron-builder.yml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# MiMoCode
+.mimocode/
+session-*.md
