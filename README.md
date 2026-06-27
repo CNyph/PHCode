@@ -12,7 +12,7 @@ and provides web search, local knowledge base, multi-user accounts, prompt manag
 conversation branching, and file upload.
 
 
-## 示例图 / Sample picture
+## 示例图 / Sample image
 <img width="1397" height="867" alt="image" src="https://github.com/user-attachments/assets/d2626313-5e16-42fb-8e03-4e3ca7ebd31e" />
 <img width="1397" height="867" alt="image" src="https://github.com/user-attachments/assets/65846a8d-f286-4374-b9e0-d5dcf6d3c047" />
 <img width="1397" height="867" alt="image" src="https://github.com/user-attachments/assets/3f52ab04-1939-4fb5-8f2a-0d84eb526d4f" />
