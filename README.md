@@ -11,6 +11,18 @@ PHCode is a desktop AI application designed for local deployment. It is built wi
 and provides web search, local knowledge base, multi-user accounts, prompt management,
 conversation branching, and file upload.
 
+
+## 示例图 / Sample picture
+<img width="1397" height="867" alt="image" src="https://github.com/user-attachments/assets/d2626313-5e16-42fb-8e03-4e3ca7ebd31e" />
+<img width="1397" height="867" alt="image" src="https://github.com/user-attachments/assets/65846a8d-f286-4374-b9e0-d5dcf6d3c047" />
+<img width="1397" height="867" alt="image" src="https://github.com/user-attachments/assets/3f52ab04-1939-4fb5-8f2a-0d84eb526d4f" />
+<img width="1397" height="867" alt="image" src="https://github.com/user-attachments/assets/eef1750a-b81a-465f-8602-c11b69fed6a5" />
+<img width="1397" height="867" alt="image" src="https://github.com/user-attachments/assets/6ad92fa0-9756-4afc-8870-5646726e5fda" />
+<img width="1397" height="867" alt="image" src="https://github.com/user-attachments/assets/546bd2d9-86d9-48f4-a6c2-ab7e08271028" />
+<img width="1397" height="867" alt="image" src="https://github.com/user-attachments/assets/a9f12843-6935-4d56-bc64-4b874c20098a" />
+<img width="1397" height="867" alt="image" src="https://github.com/user-attachments/assets/ad7b9ea0-84af-41fe-9329-3d71e6ef3d4c" />
+<img width="1397" height="867" alt="image" src="https://github.com/user-attachments/assets/2a39f1ac-09d4-4715-b2f9-fb31cb43c665" />
+
 ## 核心价值 / Why PHCode
 
 - 本地优先 / Local-first：模型、会话、知识库与设置尽量保留在本机
