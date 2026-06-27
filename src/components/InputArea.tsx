@@ -4,7 +4,6 @@ import { useChatStore } from '../stores/chatStore'
 import { authFetch } from '../services/api'
 import ModelSelector from './ModelSelector'
 import KnowledgeBaseSelector from './KnowledgeBaseSelector'
-import { getCurrentUserId, getScopedStorageKey } from '../services/session'
 
 interface AttachedFile {
   id: string
@@ -17,16 +16,6 @@ export default function InputArea() {
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([])
   const [isUploading, setIsUploading] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
-  const [temperature, setTemperature] = useState(() => {
-    try {
-      const saved = localStorage.getItem(
-        getScopedStorageKey('phcode-temperature', getCurrentUserId()),
-      )
-      return saved ? parseFloat(saved) : 0.7
-    } catch {
-      return 0.7
-    }
-  })
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const attachedFilesRef = useRef<AttachedFile[]>([])
@@ -40,6 +29,8 @@ export default function InputArea() {
     streamingContent,
     webSearchEnabled,
     setWebSearchEnabled,
+    temperature,
+    setTemperature,
   } = useChatStore()
 
   useEffect(() => {
@@ -183,14 +174,6 @@ export default function InputArea() {
     setAttachedFiles((prev) => [...prev, ...newFiles])
   }, [])
 
-  const handleTemperatureChange = useCallback((value: number) => {
-    setTemperature(value)
-    localStorage.setItem(
-      getScopedStorageKey('phcode-temperature', getCurrentUserId()),
-      value.toString(),
-    )
-  }, [])
-
   return (
     <div
       className="flex-shrink-0 px-4 pb-4 pt-2"
@@ -236,7 +219,7 @@ export default function InputArea() {
             max="2"
             step="0.1"
             value={temperature}
-            onChange={(e) => handleTemperatureChange(parseFloat(e.target.value))}
+            onChange={(e) => setTemperature(parseFloat(e.target.value))}
             className="w-16 h-1 rounded-full appearance-none cursor-pointer"
             style={{ backgroundColor: 'var(--bg-tertiary)' }}
             title={`Temperature: ${temperature}`}

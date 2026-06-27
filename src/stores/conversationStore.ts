@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { Conversation, Message } from '../types/api'
 import { conversationApi, messageApi } from '../services/api'
+import { useChatStore } from './chatStore'
 
 interface ConversationState {
   conversations: Conversation[]
@@ -50,6 +51,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       title: title || '',
       model_id: modelId,
     })
+    useChatStore.setState({ webSearchSources: [] })
     set((state) => ({
       conversations: [conversation, ...state.conversations],
       currentConversation: conversation,
@@ -76,6 +78,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         currentBranch: lastBranch,
         isLoading: false,
       })
+      useChatStore.setState({ webSearchSources: [] })
     } catch {
       set({ error: 'Failed to load conversation', isLoading: false })
     }
@@ -109,6 +112,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     if (newState.currentConversation && newState.messages.length === 0) {
       await useConversationStore.getState().selectConversation(newState.currentConversation.id)
     }
+    useChatStore.setState({ webSearchSources: [] })
   },
 
   addMessage: async (conversationId, messageData) => {
@@ -146,6 +150,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     try {
       const messages = await messageApi.getBranchMessages(currentConversation.id, branchId)
       set({ messages, isLoading: false })
+      useChatStore.setState({ webSearchSources: [] })
     } catch {
       set({ error: 'Failed to load branch', isLoading: false })
     }

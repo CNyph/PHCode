@@ -5,7 +5,22 @@ import { STORAGE_KEYS, DEFAULT_MODEL } from '../types/api'
 import type { Message } from '../types/api'
 import { getCurrentUserId, getScopedStorageKey } from '../services/session'
 
-function loadSettings(): { selectedModel: string; webSearchEnabled: boolean } {
+type WebSearchSource = {
+  title: string
+  url: string
+  snippet: string
+}
+
+type ChatSettings = {
+  selectedModel: string
+  webSearchEnabled: boolean
+  temperature: number
+  topP: number
+  maxTokens: number
+  systemPrompt: string
+}
+
+function loadSettings(): ChatSettings {
   try {
     const userId = getCurrentUserId()
     const saved = localStorage.getItem(getScopedStorageKey(STORAGE_KEYS.SETTINGS, userId))
@@ -14,15 +29,26 @@ function loadSettings(): { selectedModel: string; webSearchEnabled: boolean } {
       return {
         selectedModel: data.selectedModel || DEFAULT_MODEL,
         webSearchEnabled: Boolean(data.webSearchEnabled),
+        temperature: typeof data.temperature === 'number' ? data.temperature : 0.7,
+        topP: typeof data.topP === 'number' ? data.topP : 0.9,
+        maxTokens: typeof data.maxTokens === 'number' ? data.maxTokens : 1024,
+        systemPrompt: typeof data.systemPrompt === 'string' ? data.systemPrompt : '',
       }
     }
   } catch {
     // Ignore parse errors
   }
-  return { selectedModel: DEFAULT_MODEL, webSearchEnabled: false }
+  return {
+    selectedModel: DEFAULT_MODEL,
+    webSearchEnabled: false,
+    temperature: 0.7,
+    topP: 0.9,
+    maxTokens: 1024,
+    systemPrompt: '',
+  }
 }
 
-function saveSettings(patch: Partial<{ selectedModel: string; webSearchEnabled: boolean }>) {
+function saveSettings(patch: Partial<ChatSettings>) {
   try {
     const userId = getCurrentUserId()
     const key = getScopedStorageKey(STORAGE_KEYS.SETTINGS, userId)
@@ -61,6 +87,11 @@ interface ChatState {
   selectedModel: string | null
   selectedKnowledgeBase: string | null
   webSearchEnabled: boolean
+  temperature: number
+  topP: number
+  maxTokens: number
+  systemPrompt: string
+  webSearchSources: WebSearchSource[]
   isStreaming: boolean
   streamingContent: string
   abortController: AbortController | null
@@ -68,6 +99,11 @@ interface ChatState {
   setSelectedModel: (modelId: string) => void
   setSelectedKnowledgeBase: (kbId: string | null) => void
   setWebSearchEnabled: (enabled: boolean) => void
+  setTemperature: (value: number) => void
+  setTopP: (value: number) => void
+  setMaxTokens: (value: number) => void
+  setSystemPrompt: (value: string) => void
+  setWebSearchSources: (sources: WebSearchSource[]) => void
   reloadSelectedModel: () => void
   stopStreaming: () => void
   sendMessage: (content: string) => Promise<void>
@@ -101,10 +137,22 @@ async function streamAssistantReply(params: {
       controller.signal,
       knowledgeBaseId || undefined,
       webSearchEnabled,
+      {
+        temperature: useChatStore.getState().temperature,
+        topP: useChatStore.getState().topP,
+        maxTokens: useChatStore.getState().maxTokens,
+        systemPrompt: useChatStore.getState().systemPrompt,
+      },
     )
 
     for await (const chunk of stream) {
       if (controller.signal.aborted) break
+
+      if (Array.isArray((chunk as { sources?: unknown }).sources)) {
+        useChatStore.setState({
+          webSearchSources: (chunk as { sources: WebSearchSource[] }).sources || [],
+        })
+      }
 
       if (chunk.error) {
         streamError = chunk.error
@@ -136,6 +184,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
   selectedModel: initialSettings.selectedModel,
   selectedKnowledgeBase: null,
   webSearchEnabled: initialSettings.webSearchEnabled,
+  temperature: initialSettings.temperature,
+  topP: initialSettings.topP,
+  maxTokens: initialSettings.maxTokens,
+  systemPrompt: initialSettings.systemPrompt,
+  webSearchSources: [],
   isStreaming: false,
   streamingContent: '',
   abortController: null,
@@ -155,11 +208,39 @@ export const useChatStore = create<ChatState>((set, get) => ({
     saveSettings({ webSearchEnabled: enabled })
   },
 
+  setTemperature: (value: number) => {
+    set({ temperature: value })
+    saveSettings({ temperature: value })
+  },
+
+  setTopP: (value: number) => {
+    set({ topP: value })
+    saveSettings({ topP: value })
+  },
+
+  setMaxTokens: (value: number) => {
+    set({ maxTokens: value })
+    saveSettings({ maxTokens: value })
+  },
+
+  setSystemPrompt: (value: string) => {
+    set({ systemPrompt: value })
+    saveSettings({ systemPrompt: value })
+  },
+
+  setWebSearchSources: (sources: WebSearchSource[]) => {
+    set({ webSearchSources: sources })
+  },
+
   reloadSelectedModel: () => {
     const settings = loadSettings()
     set({
       selectedModel: settings.selectedModel,
       webSearchEnabled: settings.webSearchEnabled,
+      temperature: settings.temperature,
+      topP: settings.topP,
+      maxTokens: settings.maxTokens,
+      systemPrompt: settings.systemPrompt,
     })
   },
 
@@ -202,6 +283,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       isStreaming: true,
       streamingContent: '',
       lastUserMessage: content,
+      webSearchSources: [],
     })
 
     try {
@@ -253,6 +335,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         isStreaming: false,
         streamingContent: '',
         abortController: null,
+        webSearchSources: [],
       })
     }
   },
@@ -306,6 +389,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         streamingContent: '',
         abortController: null,
         lastUserMessage: null,
+        webSearchSources: [],
       })
     }
   },

@@ -10,6 +10,7 @@ import MarkdownRenderer from './chat/MarkdownRenderer'
 import MessageActions from './chat/MessageActions'
 import BranchSelector from './chat/BranchSelector'
 import ImagePreview from './chat/ImagePreview'
+import WebSearchSourcesCard from './chat/WebSearchSourcesCard'
 import Avatar from './Avatar'
 import { getCurrentUserId, getScopedStorageKey } from '../services/session'
 
@@ -344,6 +345,7 @@ export default function ChatArea() {
         <div className="flex justify-center">
           <BranchSelector />
         </div>
+        <WebSearchSourcesCard />
         {messages.map((message) => (
           <MessageItem
             key={message.id}

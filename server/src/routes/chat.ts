@@ -18,6 +18,13 @@ type RequestLike = {
   body: Record<string, unknown>
 }
 
+type ChatOptions = {
+  temperature?: number
+  top_p?: number
+  max_tokens?: number
+  system_prompt?: string
+}
+
 function getOllamaBaseUrlFromRequest(req: RequestLike): string | undefined {
   const headerValue = req.header('x-ollama-base-url')?.trim()
   const queryValue = typeof req.query.ollama_base_url === 'string' ? req.query.ollama_base_url.trim() : ''
@@ -139,7 +146,8 @@ async function streamDirectOllamaChat(
   model: string,
   messages: { role: string; content: string }[],
   signal: AbortSignal,
-  res: { write: (chunk: string) => void }
+  res: { write: (chunk: string) => void },
+  options?: ChatOptions
 ) {
   const response = await fetch(`${baseUrl}/api/chat`, {
     method: 'POST',
@@ -147,7 +155,12 @@ async function streamDirectOllamaChat(
     body: JSON.stringify({
       model,
       messages,
-      stream: true
+      stream: true,
+      options: {
+        temperature: typeof options?.temperature === 'number' ? options.temperature : undefined,
+        top_p: typeof options?.top_p === 'number' ? options.top_p : undefined,
+        num_predict: typeof options?.max_tokens === 'number' ? options.max_tokens : undefined
+      }
     }),
     signal
   })
@@ -193,7 +206,17 @@ async function streamDirectOllamaChat(
 }
 
 chatRoutes.post('/stream', async (req, res) => {
-  const { conversation_id, content, model_id, knowledge_base_id, web_search } = req.body
+  const {
+    conversation_id,
+    content,
+    model_id,
+    knowledge_base_id,
+    web_search,
+    temperature,
+    top_p,
+    max_tokens,
+    system_prompt
+  } = req.body
 
   if (!conversation_id || !content) {
     res.status(400).json({ error: 'conversation_id and content are required' })
@@ -215,6 +238,17 @@ chatRoutes.post('/stream', async (req, res) => {
   const history = allMessages.slice(-LIMITS.MAX_HISTORY_MESSAGES)
   const messages: { role: string; content: string }[] = history.map(m => ({ role: m.role, content: m.content }))
 
+  const conversationPrompt = typeof system_prompt === 'string' && system_prompt.trim()
+    ? system_prompt.trim()
+    : conversation.system_prompt?.trim()
+
+  if (conversationPrompt) {
+    messages.unshift({
+      role: 'system',
+      content: conversationPrompt
+    })
+  }
+
   const lastMessage = messages[messages.length - 1]
   if (!lastMessage || lastMessage.role !== 'user' || lastMessage.content !== content) {
     messages.push({ role: 'user', content })
@@ -230,10 +264,18 @@ chatRoutes.post('/stream', async (req, res) => {
     }
   }
 
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  res.flushHeaders()
+
   if (web_search) {
     try {
       const results = await searchWeb(content, 5)
       const webContext = buildWebSearchContext(results)
+      if (results.length > 0) {
+        res.write(`data: ${JSON.stringify({ sources: results })}\n\n`)
+      }
       if (webContext) {
         messages.unshift({
           role: 'system',
@@ -247,10 +289,6 @@ chatRoutes.post('/stream', async (req, res) => {
 
   try {
     const ollamaBaseUrl = await discoverOllamaBaseUrl(req)
-    res.setHeader('Content-Type', 'text/event-stream')
-    res.setHeader('Cache-Control', 'no-cache')
-    res.setHeader('Connection', 'keep-alive')
-    res.flushHeaders()
 
     let clientDisconnected = false
     const controller = new AbortController()
@@ -272,7 +310,12 @@ chatRoutes.post('/stream', async (req, res) => {
       model_id || conversation.model_id || DEFAULT_MODEL,
       messages,
       controller.signal,
-      res
+      res,
+      {
+        temperature: typeof temperature === 'number' ? temperature : undefined,
+        top_p: typeof top_p === 'number' ? top_p : undefined,
+        max_tokens: typeof max_tokens === 'number' ? max_tokens : undefined
+      }
     )
 
     clearTimeout(aiTimeout)

@@ -184,6 +184,12 @@ export const chatApi = {
     signal?: AbortSignal,
     knowledgeBaseId?: string,
     webSearchEnabled?: boolean,
+    options?: {
+      temperature?: number
+      topP?: number
+      maxTokens?: number
+      systemPrompt?: string
+    },
   ) {
     const response = await authFetch(url(API_ENDPOINTS.CHAT_STREAM), {
       method: 'POST',
@@ -195,6 +201,10 @@ export const chatApi = {
         knowledge_base_id: knowledgeBaseId,
         web_search: Boolean(webSearchEnabled),
         ollama_base_url: getOllamaBaseUrl() || undefined,
+        temperature: options?.temperature,
+        top_p: options?.topP,
+        max_tokens: options?.maxTokens,
+        system_prompt: options?.systemPrompt,
       }),
       signal,
     })
