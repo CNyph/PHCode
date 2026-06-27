@@ -1,19 +1,23 @@
 export const DEFAULT_MODEL = 'qwen2.5:0.5b'
 
 export const API_ENDPOINTS = {
+  AUTH: '/api/auth',
   CONVERSATIONS: '/api/conversations',
   MESSAGES: '/api/messages',
   CHAT_STREAM: '/api/chat/stream',
   CHAT_MODELS: '/api/chat/models',
+  WEB_SEARCH: '/api/search/web',
   SETTINGS: '/api/settings',
   UPLOAD: '/api/upload',
   KNOWLEDGE: '/api/knowledge',
+  PROMPTS: '/api/prompts',
   HEALTH: '/api/health'
 } as const
 
 export const STORAGE_KEYS = {
   SETTINGS: 'phcode-settings',
-  THEME: 'phcode-theme'
+  THEME: 'phcode-theme',
+  AUTH: 'phcode-auth'
 } as const
 
 export const TIMEOUTS = {

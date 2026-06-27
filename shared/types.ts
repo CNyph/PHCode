@@ -1,7 +1,21 @@
 export type MessageRole = 'user' | 'assistant' | 'system'
 
+export interface AuthUser {
+  id: string
+  username: string
+  display_name: string
+  avatar_url: string | null
+  created_at: string
+}
+
+export interface AuthResponse {
+  token: string
+  user: AuthUser
+}
+
 export interface Conversation {
   id: string
+  user_id?: string | null
   title: string
   model_id: string | null
   system_prompt: string | null
@@ -13,6 +27,9 @@ export interface Conversation {
 export interface Message {
   id: string
   conversation_id: string
+  user_id?: string | null
+  parent_message_id: string | null
+  branch_id: string
   role: MessageRole
   content: string
   model_id: string | null
@@ -31,12 +48,16 @@ export interface CreateMessageRequest {
   content: string
   model_id?: string
   tokens_used?: number
+  parent_message_id?: string
+  branch_id?: string
 }
 
 export interface ChatRequest {
   conversation_id: string
   content: string
   model_id?: string
+  knowledge_base_id?: string
+  web_search?: boolean
 }
 
 export interface ModelInfo {
@@ -49,16 +70,19 @@ export interface ModelInfo {
 export interface ModelListResponse {
   object: string
   data: ModelInfo[]
+  resolved_ollama_url?: string | null
 }
 
 export interface Setting {
   key: string
   value: string
+  user_id?: string | null
   updated_at: string
 }
 
 export interface PromptTemplate {
   id: string
+  user_id?: string | null
   name: string
   content: string
   category: string
@@ -68,6 +92,7 @@ export interface PromptTemplate {
 
 export interface KnowledgeBase {
   id: string
+  user_id?: string | null
   name: string
   description: string
   created_at: string
@@ -76,10 +101,12 @@ export interface KnowledgeBase {
 export interface KnowledgeDocument {
   id: string
   knowledge_base_id: string
+  user_id?: string | null
   filename: string
   file_path: string
   file_type: string
   content: string
+  embedding: string | null
   created_at: string
 }
 

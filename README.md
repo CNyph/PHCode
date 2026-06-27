@@ -1,135 +1,116 @@
 # PHCode
 
-> 你的私人 AI 助手，数据永不离开本机
+> 你的本地 AI 助手，数据永不离开本机
 
-基于 Ollama 的本地 AI 桌面对话应用，支持多模型切换、Markdown 渲染、代码高亮、LaTeX 公式、文件上传等功能。
+PHCode 是一款基于 Ollama 的本地 AI 桌面对话应用，采用 `Electron + React + Vite + Node.js + FastAPI`
+架构，支持多模型切换、联网搜索、本地知识库、Prompt 管理、多用户账户和对话流式输出。
 
-## 功能特性
+## 核心功能
 
-### 核心功能
-- 🤖 **多模型支持** - 通过 Ollama 运行本地大语言模型（Llama、Qwen、Mistral 等）
-- 💬 **多会话管理** - 创建、切换、重命名、删除对话
-- 📝 **Markdown 渲染** - 完整的 Markdown 支持，包括表格、列表、引用
-- 🎨 **代码高亮** - 支持 100+ 编程语言的语法高亮
-- 📐 **LaTeX 公式** - KaTeX 数学公式渲染
-- 📎 **文件上传** - 支持图片、PDF、代码文件等
-- 🖼️ **图片预览** - 缩略图查看 + 点击放大
+| 功能 | 说明 |
+|---|---|
+| 本地 AI 对话 | 对接 Ollama 本地模型，支持流式回复 |
+| 模型自动探测 | 自动发现本机 Ollama 地址并加载模型列表 |
+| 联网搜索 | 可选开启，失败自动降级，不影响本地对话 |
+| 多用户账户 | 本地登录/注册界面，账户间数据隔离 |
+| 会话管理 | 新建、切换、重命名、删除对话 |
+| 对话分支 | 支持消息分支浏览与继续生成 |
+| 本地知识库 | 上传/管理知识库文档，支持 RAG 检索 |
+| Prompt 管理 | 保存、编辑、复制常用 Prompt 模板 |
+| Markdown 渲染 | 支持表格、代码块、引用、列表等 |
+| 代码高亮 | 支持代码块语法高亮 |
+| 数学公式 | 使用 KaTeX 渲染 LaTeX 公式 |
+| 文件上传 | 支持图片、PDF、文本、代码文件等 |
+| 主题切换 | 深色/浅色主题自动保存 |
+| 导出能力 | 可导出聊天记录为 JSON |
 
-### 界面特性
-- 🌓 **深色/浅色主题** - 一键切换，自动保存偏好
-- 👤 **用户头像** - 自定义头像显示
-- 🔍 **搜索历史** - 快速查找对话
-- ⚡ **流式输出** - 实时显示 AI 生成内容
-- 📱 **响应式布局** - 自适应窗口大小
+## 技术架构
 
-### 高级功能
-- 📚 **知识库** - RAG 支持，上传文档建立知识库
-- 📤 **导出功能** - 一键导出聊天记录为 JSON
-- ⚙️ **设置中心** - 模型配置、Ollama 连接状态
-- 🔌 **Embedding** - 文本向量化 API
-
-## 技术栈
-
-| 层级 | 技术 |
-|------|------|
-| 前端 | React 18 + TypeScript + Vite + Tailwind CSS |
-| 桌面端 | Electron 31 |
-| 业务层 | Node.js + Express |
-| AI 层 | Python + FastAPI |
-| 本地模型 | Ollama |
-| 数据库 | SQLite (sql.js) |
-
-## 快速开始
-
-### 前置要求
-
-- Node.js 18+
-- Python 3.10+
-- Ollama（已安装并运行）
-
-### 安装步骤
-
-1. **克隆仓库**
-   ```bash
-   git clone https://github.com/your-username/phcode.git
-   cd phcode
-   ```
-
-2. **安装前端依赖**
-   ```bash
-   npm install
-   ```
-
-3. **安装服务端依赖**
-   ```bash
-   cd server && npm install && cd ..
-   ```
-
-4. **安装 Python 依赖**
-   ```bash
-   cd ai && pip install -r requirements.txt && cd ..
-   ```
-
-5. **安装 Ollama 模型**
-   ```bash
-   ollama pull llama3.2
-   ```
-
-6. **启动应用**
-   ```bash
-   npm run dev
-   ```
-
-## 开发命令
-
-```bash
-npm run dev              # 启动所有服务
-npm run dev:server       # 仅启动 Node.js 服务
-npm run dev:ai           # 仅启动 Python AI 服务
-npm run dev:frontend     # 仅启动 Vite 前端
-npm run build            # 构建生产版本
-npm run lint             # 代码检查
-npm run typecheck        # 类型检查
+```text
+React (Vite) → Electron → Node.js (Express, port 3000) → Python (FastAPI, port 8000) → Ollama (port 11434)
+                                      ↓
+                                 SQLite (data/phcode.db)
 ```
 
 ## 项目结构
 
+```text
+src/                          # React 前端
+  components/                 # UI 组件
+  contexts/                   # React Context
+  hooks/                      # 自定义 Hooks
+  layouts/                    # 页面布局
+  pages/                      # 页面级组件
+  services/                   # 前端 API 客户端
+  stores/                     # Zustand 状态管理
+  styles/                     # 全局样式
+  types/                      # TypeScript 类型
+electron/                     # Electron 主进程
+server/                       # Node.js 业务层
+  src/routes/                 # API 路由
+  src/repositories/           # SQLite 数据访问
+ai/                           # Python AI 服务
+  app/routers/                # FastAPI 路由
+  app/services/               # Ollama / RAG 服务
+data/                         # 本地数据目录
+  phcode.db                   # SQLite 数据库
+  uploads/                    # 上传文件
 ```
-PHCode/
-├── src/                    # React 前端
-│   ├── components/         # UI 组件
-│   ├── stores/             # Zustand 状态管理
-│   ├── services/           # API 服务
-│   └── pages/              # 页面组件
-├── server/                 # Node.js 业务层
-│   └── src/
-│       ├── routes/         # API 路由
-│       └── repositories/   # 数据访问层
-├── ai/                     # Python AI 服务
-│   └── app/
-│       ├── routers/        # FastAPI 路由
-│       └── services/       # Ollama 客户端
-├── electron/               # Electron 主进程
-└── data/                   # 本地数据存储
+
+## 快速开始
+
+### 环境要求
+
+- Node.js 18+
+- Python 3.10+
+- Ollama 已安装并运行
+
+### 安装依赖
+
+```bash
+npm install
+cd server && npm install && cd ..
+cd ai && pip install -r requirements.txt && cd ..
+```
+
+### 启动开发环境
+
+```bash
+npm run dev
+```
+
+## 常用命令
+
+```bash
+npm run dev              # 启动全部服务（前端 + Electron + Node.js + FastAPI）
+npm run dev:server       # 仅启动 Node.js 服务
+npm run dev:ai           # 仅启动 Python AI 服务
+npm run dev:frontend     # 仅启动 Vite 前端
+npm run dev:electron     # 仅启动 Electron
+npm run build            # 构建生产版本
+npm run lint             # ESLint 检查
+npm run lint:fix         # ESLint 自动修复
+npm run format           # Prettier 格式化
+npm run format:check     # Prettier 检查
+npm run typecheck        # TypeScript 类型检查
 ```
 
 ## 快捷键
 
 | 快捷键 | 功能 |
-|--------|------|
+|---|---|
 | `Ctrl/Cmd + N` | 新建对话 |
 | `Ctrl/Cmd + B` | 切换侧边栏 |
 | `Ctrl/Cmd + ,` | 打开设置 |
 | `Enter` | 发送消息 |
 | `Shift + Enter` | 换行 |
 
+## 说明
+
+- 登录/注册是本地账户体系，数据保存在本机数据库中。
+- 联网搜索为可选能力，外网不可用时会自动回退到纯本地对话。
+- Ollama 模型目录在本机安装后自动探测，通常无需手动配置地址。
+
 ## 许可证
 
 [MIT License](LICENSE)
-
-## 致谢
-
-- [Ollama](https://ollama.com/) - 本地大语言模型运行时
-- [React](https://react.dev/) - 用户界面库
-- [Electron](https://www.electronjs.org/) - 桌面应用框架
-- [FastAPI](https://fastapi.tiangolo.com/) - 高性能 Python Web 框架

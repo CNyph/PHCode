@@ -6,6 +6,7 @@ import rehypeHighlight from 'rehype-highlight'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import CodeBlock from './CodeBlock'
+import MermaidBlock from './MermaidBlock'
 
 interface MarkdownRendererProps {
   content: string
@@ -30,7 +31,12 @@ export default function MarkdownRenderer({ content }: MarkdownRendererProps) {
       components={{
         code({ className, children, ...props }) {
           const match = /language-(\w+)/.exec(className || '')
+          const language = match?.[1]
           const isInline = !match && !className
+
+          if (language === 'mermaid') {
+            return <MermaidBlock code={String(children).replace(/\n$/, '')} />
+          }
 
           if (isInline) {
             return (
@@ -38,7 +44,7 @@ export default function MarkdownRenderer({ content }: MarkdownRendererProps) {
                 className="px-1.5 py-0.5 rounded text-sm"
                 style={{
                   backgroundColor: 'var(--bg-tertiary)',
-                  color: 'var(--accent)'
+                  color: 'var(--accent)',
                 }}
                 {...props}
               >
@@ -47,11 +53,7 @@ export default function MarkdownRenderer({ content }: MarkdownRendererProps) {
             )
           }
 
-          return (
-            <CodeBlock language={match?.[1]}>
-              {String(children).replace(/\n$/, '')}
-            </CodeBlock>
-          )
+          return <CodeBlock language={match?.[1]}>{String(children).replace(/\n$/, '')}</CodeBlock>
         },
         p({ children }) {
           return (
@@ -83,14 +85,20 @@ export default function MarkdownRenderer({ content }: MarkdownRendererProps) {
         },
         ul({ children }) {
           return (
-            <ul className="list-disc list-inside mb-2 space-y-1" style={{ color: 'var(--text-primary)' }}>
+            <ul
+              className="list-disc list-inside mb-2 space-y-1"
+              style={{ color: 'var(--text-primary)' }}
+            >
               {children}
             </ul>
           )
         },
         ol({ children }) {
           return (
-            <ol className="list-decimal list-inside mb-2 space-y-1" style={{ color: 'var(--text-primary)' }}>
+            <ol
+              className="list-decimal list-inside mb-2 space-y-1"
+              style={{ color: 'var(--text-primary)' }}
+            >
               {children}
             </ol>
           )
@@ -104,7 +112,7 @@ export default function MarkdownRenderer({ content }: MarkdownRendererProps) {
               className="border-l-4 pl-4 my-2 italic"
               style={{
                 borderColor: 'var(--accent)',
-                color: 'var(--text-secondary)'
+                color: 'var(--text-secondary)',
               }}
             >
               {children}
@@ -137,11 +145,7 @@ export default function MarkdownRenderer({ content }: MarkdownRendererProps) {
           )
         },
         thead({ children }) {
-          return (
-            <thead style={{ backgroundColor: 'var(--bg-secondary)' }}>
-              {children}
-            </thead>
-          )
+          return <thead style={{ backgroundColor: 'var(--bg-secondary)' }}>{children}</thead>
         },
         th({ children }) {
           return (
@@ -164,19 +168,14 @@ export default function MarkdownRenderer({ content }: MarkdownRendererProps) {
           )
         },
         hr() {
-          return (
-            <hr
-              className="my-4"
-              style={{ borderColor: 'var(--border-color)' }}
-            />
-          )
+          return <hr className="my-4" style={{ borderColor: 'var(--border-color)' }} />
         },
         strong({ children }) {
           return <strong className="font-semibold">{children}</strong>
         },
         em({ children }) {
           return <em className="italic">{children}</em>
-        }
+        },
       }}
     >
       {processedContent}

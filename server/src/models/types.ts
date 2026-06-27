@@ -1,4 +1,6 @@
 export type {
+  AuthUser,
+  AuthResponse,
   Conversation,
   Message,
   MessageRole,

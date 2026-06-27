@@ -16,24 +16,35 @@ export default function MainLayout() {
 
   useEffect(() => {
     const { onNewChat, onToggleSidebar, onOpenSettings } = window.electronAPI || {}
+    const cleanups: (() => void)[] = []
 
     if (onNewChat) {
-      onNewChat(async () => {
-        await createConversation()
-        setCurrentPage('chat')
-      })
+      cleanups.push(
+        onNewChat(async () => {
+          await createConversation()
+          setCurrentPage('chat')
+        }),
+      )
     }
 
     if (onToggleSidebar) {
-      onToggleSidebar(() => {
-        setSidebarOpen(prev => !prev)
-      })
+      cleanups.push(
+        onToggleSidebar(() => {
+          setSidebarOpen((prev) => !prev)
+        }),
+      )
     }
 
     if (onOpenSettings) {
-      onOpenSettings(() => {
-        setCurrentPage('settings')
-      })
+      cleanups.push(
+        onOpenSettings(() => {
+          setCurrentPage('settings')
+        }),
+      )
+    }
+
+    return () => {
+      cleanups.forEach((fn) => fn())
     }
   }, [createConversation])
 
@@ -47,7 +58,7 @@ export default function MainLayout() {
       className="flex flex-col h-screen w-screen overflow-hidden"
       style={{ backgroundColor: 'var(--bg-primary)' }}
     >
-      <TitleBar sidebarOpen={sidebarOpen} onToggleSidebar={() => setSidebarOpen(prev => !prev)} />
+      <TitleBar sidebarOpen={sidebarOpen} onToggleSidebar={() => setSidebarOpen((prev) => !prev)} />
       <div className="flex flex-1 overflow-hidden">
         <AnimatePresence mode="wait">
           {sidebarOpen && (

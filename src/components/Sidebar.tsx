@@ -1,9 +1,23 @@
 import { useEffect, useState, useRef, useMemo } from 'react'
-import { Plus, MessageSquare, Settings, Trash2, Check, X, Sun, Moon, Search, Download, Upload } from 'lucide-react'
+import {
+  Plus,
+  MessageSquare,
+  Settings,
+  Trash2,
+  Check,
+  X,
+  Sun,
+  Moon,
+  Search,
+  Download,
+  Upload,
+  LogOut,
+} from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useConversationStore } from '../stores/conversationStore'
 import { useTheme } from '../contexts/ThemeContext'
 import { exportToJson, downloadFile, importFromJson } from '../services/exportService'
+import { useAuthStore } from '../stores/authStore'
 
 interface SidebarProps {
   onSettingsClick: () => void
@@ -17,7 +31,7 @@ export default function Sidebar({ onSettingsClick, onNewChat }: SidebarProps) {
     fetchConversations,
     selectConversation,
     updateConversation,
-    deleteConversation
+    deleteConversation,
   } = useConversationStore()
 
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -28,6 +42,7 @@ export default function Sidebar({ onSettingsClick, onNewChat }: SidebarProps) {
   const { theme, toggleTheme } = useTheme()
 
   const importInputRef = useRef<HTMLInputElement>(null)
+  const { logout } = useAuthStore()
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -35,7 +50,9 @@ export default function Sidebar({ onSettingsClick, onNewChat }: SidebarProps) {
     try {
       const { conversations: importedConvs } = await importFromJson(file)
       for (const conv of importedConvs) {
-        await useConversationStore.getState().createConversation(conv.title, conv.model_id || undefined)
+        await useConversationStore
+          .getState()
+          .createConversation(conv.title, conv.model_id || undefined)
       }
       await fetchConversations()
     } catch (err) {
@@ -47,9 +64,7 @@ export default function Sidebar({ onSettingsClick, onNewChat }: SidebarProps) {
   const filteredConversations = useMemo(() => {
     if (!searchQuery.trim()) return conversations
     const query = searchQuery.toLowerCase()
-    return conversations.filter(chat =>
-      chat.title.toLowerCase().includes(query)
-    )
+    return conversations.filter((chat) => chat.title.toLowerCase().includes(query))
   }, [conversations, searchQuery])
 
   useEffect(() => {
@@ -122,7 +137,7 @@ export default function Sidebar({ onSettingsClick, onNewChat }: SidebarProps) {
           className="flex items-center gap-2 px-3 py-2 rounded-lg"
           style={{
             backgroundColor: 'var(--input-bg)',
-            border: '1px solid var(--input-border)'
+            border: '1px solid var(--input-border)',
           }}
         >
           <Search size={14} style={{ color: 'var(--text-tertiary)' }} />
@@ -196,8 +211,12 @@ export default function Sidebar({ onSettingsClick, onNewChat }: SidebarProps) {
                   onDoubleClick={() => handleStartRename(chat.id, chat.title)}
                   className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left transition-colors duration-160 cursor-pointer"
                   style={{
-                    backgroundColor: currentConversation?.id === chat.id ? 'var(--bg-active)' : 'transparent',
-                    color: currentConversation?.id === chat.id ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    backgroundColor:
+                      currentConversation?.id === chat.id ? 'var(--bg-active)' : 'transparent',
+                    color:
+                      currentConversation?.id === chat.id
+                        ? 'var(--text-primary)'
+                        : 'var(--text-secondary)',
                   }}
                   onMouseEnter={(e) => {
                     if (currentConversation?.id !== chat.id) {
@@ -233,7 +252,10 @@ export default function Sidebar({ onSettingsClick, onNewChat }: SidebarProps) {
             </motion.div>
           ))}
           {filteredConversations.length === 0 && searchQuery && (
-            <div className="px-3 py-4 text-center text-sm" style={{ color: 'var(--text-tertiary)' }}>
+            <div
+              className="px-3 py-4 text-center text-sm"
+              style={{ color: 'var(--text-tertiary)' }}
+            >
               未找到对话
             </div>
           )}
@@ -277,7 +299,11 @@ export default function Sidebar({ onSettingsClick, onNewChat }: SidebarProps) {
               }
               if (allMessages.length > 0) {
                 const json = exportToJson(conversations, allMessages)
-                downloadFile(json, `phcode-export-${new Date().toISOString().slice(0, 10)}.json`, 'application/json')
+                downloadFile(
+                  json,
+                  `phcode-export-${new Date().toISOString().slice(0, 10)}.json`,
+                  'application/json',
+                )
               }
             }}
             className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm cursor-pointer transition-colors duration-160"
@@ -296,6 +322,16 @@ export default function Sidebar({ onSettingsClick, onNewChat }: SidebarProps) {
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
           >
             <Settings size={16} />
+          </button>
+          <button
+            onClick={() => void logout()}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm cursor-pointer transition-colors duration-160"
+            style={{ color: 'var(--text-secondary)' }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--sidebar-hover)')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+            title="退出登录"
+          >
+            <LogOut size={16} />
           </button>
         </div>
       </div>

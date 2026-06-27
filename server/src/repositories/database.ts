@@ -38,6 +38,7 @@ export async function initDatabase(): Promise<void> {
   db.run(`
     CREATE TABLE IF NOT EXISTS conversations (
       id TEXT PRIMARY KEY,
+      user_id TEXT,
       title TEXT NOT NULL DEFAULT 'New Chat',
       model_id TEXT,
       system_prompt TEXT,
@@ -50,7 +51,10 @@ export async function initDatabase(): Promise<void> {
   db.run(`
     CREATE TABLE IF NOT EXISTS messages (
       id TEXT PRIMARY KEY,
+      user_id TEXT,
       conversation_id TEXT NOT NULL,
+      parent_message_id TEXT,
+      branch_id TEXT NOT NULL DEFAULT 'main',
       role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
       content TEXT NOT NULL,
       model_id TEXT,
@@ -64,14 +68,38 @@ export async function initDatabase(): Promise<void> {
   db.run(`
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
+      user_id TEXT,
       value TEXT NOT NULL,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `)
 
   db.run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      avatar_url TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `)
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+      token TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_used_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      expires_at DATETIME,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `)
+
+  db.run(`
     CREATE TABLE IF NOT EXISTS prompt_templates (
       id TEXT PRIMARY KEY,
+      user_id TEXT,
       name TEXT NOT NULL,
       content TEXT NOT NULL,
       category TEXT DEFAULT 'general',
@@ -83,6 +111,7 @@ export async function initDatabase(): Promise<void> {
   db.run(`
     CREATE TABLE IF NOT EXISTS knowledge_bases (
       id TEXT PRIMARY KEY,
+      user_id TEXT,
       name TEXT NOT NULL,
       description TEXT DEFAULT '',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -92,6 +121,7 @@ export async function initDatabase(): Promise<void> {
   db.run(`
     CREATE TABLE IF NOT EXISTS knowledge_documents (
       id TEXT PRIMARY KEY,
+      user_id TEXT,
       knowledge_base_id TEXT NOT NULL,
       filename TEXT NOT NULL,
       file_path TEXT NOT NULL,
@@ -103,8 +133,18 @@ export async function initDatabase(): Promise<void> {
     )
   `)
 
+  migrateDatabase()
+
   db.run(`CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id)`)
   db.run(`CREATE INDEX IF NOT EXISTS idx_conversations_updated ON conversations(updated_at DESC)`)
+  db.run(`CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(user_id, updated_at DESC)`)
+  db.run(`CREATE INDEX IF NOT EXISTS idx_messages_user ON messages(user_id, created_at DESC)`)
+  db.run(`CREATE INDEX IF NOT EXISTS idx_settings_user ON settings(user_id, key)`)
+  db.run(`CREATE INDEX IF NOT EXISTS idx_prompt_user ON prompt_templates(user_id, created_at DESC)`)
+  db.run(`CREATE INDEX IF NOT EXISTS idx_kb_user ON knowledge_bases(user_id, created_at DESC)`)
+  db.run(`CREATE INDEX IF NOT EXISTS idx_kd_user ON knowledge_documents(user_id, created_at DESC)`)
+  db.run(`CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)`)
+  db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_user ON auth_sessions(user_id, last_used_at DESC)`)
 
   await saveDatabase()
   console.log('[Database] Initialized at', DB_PATH)
@@ -157,4 +197,28 @@ export function queryOne<T>(sql: string, params: unknown[] = []): T | undefined 
 export function run(sql: string, params: unknown[] = []): void {
   db.run(sql, params)
   scheduleSave()
+}
+
+function migrateDatabase(): void {
+  try {
+    addColumnIfMissing('conversations', 'user_id', 'TEXT')
+    addColumnIfMissing('messages', 'user_id', 'TEXT')
+    addColumnIfMissing('settings', 'user_id', 'TEXT')
+    addColumnIfMissing('prompt_templates', 'user_id', 'TEXT')
+    addColumnIfMissing('knowledge_bases', 'user_id', 'TEXT')
+    addColumnIfMissing('knowledge_documents', 'user_id', 'TEXT')
+    addColumnIfMissing('messages', 'parent_message_id', 'TEXT')
+    addColumnIfMissing('messages', 'branch_id', "TEXT NOT NULL DEFAULT 'main'")
+    addColumnIfMissing('knowledge_documents', 'embedding', 'BLOB')
+  } catch (err) {
+    console.warn('[Database] Migration skipped:', (err as Error).message)
+  }
+}
+
+function addColumnIfMissing(tableName: string, columnName: string, columnDefinition: string): void {
+  const columns = queryAll<{ name: string }>(`PRAGMA table_info(${tableName})`)
+  const columnNames = columns.map(c => c.name)
+  if (!columnNames.includes(columnName)) {
+    db.run(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDefinition}`)
+  }
 }

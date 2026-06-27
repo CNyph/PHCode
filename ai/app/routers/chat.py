@@ -1,28 +1,33 @@
 import json
 import time
 import uuid
-from fastapi import APIRouter
+from fastapi import APIRouter, Header
 from fastapi.responses import StreamingResponse
 from ..models.schemas import ChatCompletionRequest, ChatCompletionResponse, ChatCompletionChoice, Usage, Message
-from ..services.ollama_service import ollama_service
+from ..services.provider_factory import get_provider
 
 router = APIRouter(prefix="/v1", tags=["chat"])
 
 
 @router.post("/chat/completions")
-async def chat_completions(request: ChatCompletionRequest):
+async def chat_completions(
+    request: ChatCompletionRequest,
+    x_ollama_base_url: str | None = Header(default=None),
+):
+    ollama_base_url = x_ollama_base_url.strip() if x_ollama_base_url else None
     messages = [{"role": m.role, "content": m.content} for m in request.messages]
 
     if request.stream:
         return StreamingResponse(
-            stream_chat(request.model, messages),
+            stream_chat(request.model, messages, ollama_base_url),
             media_type="text/event-stream"
         )
 
-    result = await ollama_service.chat(
+    result = await get_provider().chat(
         model=request.model,
         messages=messages,
-        stream=False
+        stream=False,
+        base_url_override=ollama_base_url
     )
 
     response_message = result.get("message", {})
@@ -48,15 +53,21 @@ async def chat_completions(request: ChatCompletionRequest):
     )
 
 
-async def stream_chat(model: str, messages: list[dict]):
+async def stream_chat(model: str, messages: list[dict], ollama_base_url: str | None = None):
     try:
-        async for line in ollama_service._stream_chat({
-            "model": model,
-            "messages": messages,
-            "stream": True
-        }):
+        stream = await get_provider().chat(
+            model=model,
+            messages=messages,
+            stream=True,
+            base_url_override=ollama_base_url
+        )
+        async for line in stream:
             try:
                 data = json.loads(line)
+                if data.get("error"):
+                    yield f"data: {json.dumps({'error': data['error']})}\n\n"
+                    yield "data: [DONE]\n\n"
+                    return
                 content = data.get("message", {}).get("content", "")
                 if content:
                     chunk = {

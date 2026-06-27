@@ -2,33 +2,45 @@ import { v4 as uuidv4 } from 'uuid'
 import { queryAll, queryOne, run } from './database.js'
 import type { Conversation, CreateConversationRequest } from '../models/types.js'
 
-export function getAllConversations(): Conversation[] {
+export function getAllConversations(userId?: string): Conversation[] {
+  if (userId) {
+    return queryAll<Conversation>(
+      'SELECT * FROM conversations WHERE is_deleted = 0 AND (user_id = ? OR user_id IS NULL) ORDER BY updated_at DESC',
+      [userId]
+    )
+  }
   return queryAll<Conversation>(
     'SELECT * FROM conversations WHERE is_deleted = 0 ORDER BY updated_at DESC'
   )
 }
 
-export function getConversationById(id: string): Conversation | undefined {
+export function getConversationById(id: string, userId?: string): Conversation | undefined {
+  if (userId) {
+    return queryOne<Conversation>(
+      'SELECT * FROM conversations WHERE id = ? AND is_deleted = 0 AND (user_id = ? OR user_id IS NULL)',
+      [id, userId]
+    )
+  }
   return queryOne<Conversation>(
     'SELECT * FROM conversations WHERE id = ? AND is_deleted = 0',
     [id]
   )
 }
 
-export function createConversation(data: CreateConversationRequest): Conversation {
+export function createConversation(data: CreateConversationRequest, userId?: string): Conversation {
   const id = uuidv4()
   const now = new Date().toISOString()
 
   run(
-    'INSERT INTO conversations (id, title, model_id, system_prompt, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
-    [id, data.title || 'New Chat', data.model_id || null, data.system_prompt || null, now, now]
+    'INSERT INTO conversations (id, user_id, title, model_id, system_prompt, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [id, userId || null, data.title || 'New Chat', data.model_id || null, data.system_prompt || null, now, now]
   )
 
-  return getConversationById(id)!
+  return getConversationById(id, userId)!
 }
 
-export function updateConversation(id: string, data: Partial<CreateConversationRequest>): Conversation | null {
-  const existing = getConversationById(id)
+export function updateConversation(id: string, data: Partial<CreateConversationRequest>, userId?: string): Conversation | null {
+  const existing = getConversationById(id, userId)
   if (!existing) return null
 
   const updates: string[] = []
@@ -52,17 +64,25 @@ export function updateConversation(id: string, data: Partial<CreateConversationR
   updates.push('updated_at = ?')
   values.push(new Date().toISOString())
   values.push(id)
+  if (userId) {
+    values.push(userId)
+    run(`UPDATE conversations SET ${updates.join(', ')} WHERE id = ? AND (user_id = ? OR user_id IS NULL)`, values)
+  } else {
+    run(`UPDATE conversations SET ${updates.join(', ')} WHERE id = ?`, values)
+  }
 
-  run(`UPDATE conversations SET ${updates.join(', ')} WHERE id = ?`, values)
-
-  return getConversationById(id)!
+  return getConversationById(id, userId)!
 }
 
-export function deleteConversation(id: string): boolean {
-  const existing = getConversationById(id)
+export function deleteConversation(id: string, userId?: string): boolean {
+  const existing = getConversationById(id, userId)
   if (!existing) return false
 
-  run('UPDATE conversations SET is_deleted = 1, updated_at = ? WHERE id = ?', [new Date().toISOString(), id])
+  if (userId) {
+    run('UPDATE conversations SET is_deleted = 1, updated_at = ? WHERE id = ? AND (user_id = ? OR user_id IS NULL)', [new Date().toISOString(), id, userId])
+  } else {
+    run('UPDATE conversations SET is_deleted = 1, updated_at = ? WHERE id = ?', [new Date().toISOString(), id])
+  }
   return true
 }
 

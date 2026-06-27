@@ -1,10 +1,8 @@
 import { useState, useEffect } from 'react'
 import { ArrowLeft, Plus, Trash2, FileText, Loader2 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { API_ENDPOINTS } from '../types/api'
+import { knowledgeApi } from '../services/api'
 import type { KnowledgeBase } from '../types/api'
-
-const API_BASE = 'http://localhost:3000'
 
 interface KnowledgeBasePageProps {
   onBack: () => void
@@ -20,12 +18,10 @@ export default function KnowledgeBasePage({ onBack }: KnowledgeBasePageProps) {
   const fetchBases = async () => {
     setIsLoading(true)
     try {
-      const response = await fetch(`${API_BASE}/knowledge`)
-      if (!response.ok) throw new Error('Failed to fetch')
-      const data = await response.json()
+      const data = await knowledgeApi.getAll()
       setBases(data)
     } catch (error) {
-      console.error('获取知识库失败:', error)
+      console.error('鑾峰彇鐭ヨ瘑搴撳け璐?', error)
     } finally {
       setIsLoading(false)
     }
@@ -36,52 +32,40 @@ export default function KnowledgeBasePage({ onBack }: KnowledgeBasePageProps) {
     const load = async () => {
       setIsLoading(true)
       try {
-        const response = await fetch(`${API_BASE}${API_ENDPOINTS.KNOWLEDGE}`)
-        if (!response.ok) throw new Error('Failed to fetch')
-        const data = await response.json()
+        const data = await knowledgeApi.getAll()
         if (!cancelled) setBases(data)
       } catch (error) {
-        console.error('获取知识库失败:', error)
+        console.error('鑾峰彇鐭ヨ瘑搴撳け璐?', error)
       } finally {
         if (!cancelled) setIsLoading(false)
       }
     }
     load()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const handleCreate = async () => {
     if (!newName.trim()) return
 
     try {
-      const response = await fetch(`${API_BASE}${API_ENDPOINTS.KNOWLEDGE}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newName, description: newDescription })
-      })
-
-      if (response.ok) {
-        setShowCreateModal(false)
-        setNewName('')
-        setNewDescription('')
-        await fetchBases()
-      }
+      await knowledgeApi.create({ name: newName, description: newDescription })
+      setShowCreateModal(false)
+      setNewName('')
+      setNewDescription('')
+      await fetchBases()
     } catch (error) {
-      console.error('创建知识库失败:', error)
+      console.error('鍒涘缓鐭ヨ瘑搴撳け璐?', error)
     }
   }
 
   const handleDelete = async (id: string) => {
     try {
-      const response = await fetch(`${API_BASE}${API_ENDPOINTS.KNOWLEDGE}/${id}`, {
-        method: 'DELETE'
-      })
-
-      if (response.ok) {
-        await fetchBases()
-      }
+      await knowledgeApi.delete(id)
+      await fetchBases()
     } catch (error) {
-      console.error('删除知识库失败:', error)
+      console.error('鍒犻櫎鐭ヨ瘑搴撳け璐?', error)
     }
   }
 
@@ -113,7 +97,7 @@ export default function KnowledgeBasePage({ onBack }: KnowledgeBasePageProps) {
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium"
           style={{
             backgroundColor: 'var(--accent)',
-            color: 'var(--bg-primary)'
+            color: 'var(--bg-primary)',
           }}
         >
           <Plus size={14} />
@@ -137,7 +121,7 @@ export default function KnowledgeBasePage({ onBack }: KnowledgeBasePageProps) {
               className="mt-4 px-4 py-2 rounded-lg text-sm"
               style={{
                 backgroundColor: 'var(--bg-secondary)',
-                color: 'var(--text-primary)'
+                color: 'var(--text-primary)',
               }}
             >
               创建第一个知识库
@@ -145,7 +129,7 @@ export default function KnowledgeBasePage({ onBack }: KnowledgeBasePageProps) {
           </div>
         ) : (
           <div className="grid gap-4 max-w-3xl">
-            {bases.map(base => (
+            {bases.map((base) => (
               <motion.div
                 key={base.id}
                 initial={{ opacity: 0, y: 4 }}
@@ -153,7 +137,7 @@ export default function KnowledgeBasePage({ onBack }: KnowledgeBasePageProps) {
                 className="flex items-center justify-between p-4 rounded-xl"
                 style={{
                   backgroundColor: 'var(--bg-secondary)',
-                  border: '1px solid var(--border-color)'
+                  border: '1px solid var(--border-color)',
                 }}
               >
                 <div className="flex items-center gap-3">
@@ -210,7 +194,7 @@ export default function KnowledgeBasePage({ onBack }: KnowledgeBasePageProps) {
               className="w-full max-w-md rounded-xl p-6"
               style={{
                 backgroundColor: 'var(--bg-primary)',
-                border: '1px solid var(--border-color)'
+                border: '1px solid var(--border-color)',
               }}
               onClick={(e) => e.stopPropagation()}
             >
@@ -219,7 +203,10 @@ export default function KnowledgeBasePage({ onBack }: KnowledgeBasePageProps) {
               </h2>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+                  <label
+                    className="block text-sm mb-1.5"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
                     名称
                   </label>
                   <input
@@ -229,14 +216,17 @@ export default function KnowledgeBasePage({ onBack }: KnowledgeBasePageProps) {
                     style={{
                       backgroundColor: 'var(--input-bg)',
                       border: '1px solid var(--input-border)',
-                      color: 'var(--text-primary)'
+                      color: 'var(--text-primary)',
                     }}
                     placeholder="输入知识库名称"
                     autoFocus
                   />
                 </div>
                 <div>
-                  <label className="block text-sm mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+                  <label
+                    className="block text-sm mb-1.5"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
                     描述（可选）
                   </label>
                   <textarea
@@ -246,7 +236,7 @@ export default function KnowledgeBasePage({ onBack }: KnowledgeBasePageProps) {
                     style={{
                       backgroundColor: 'var(--input-bg)',
                       border: '1px solid var(--input-border)',
-                      color: 'var(--text-primary)'
+                      color: 'var(--text-primary)',
                     }}
                     rows={3}
                     placeholder="输入知识库描述"
@@ -267,7 +257,7 @@ export default function KnowledgeBasePage({ onBack }: KnowledgeBasePageProps) {
                   className="px-4 py-2 rounded-lg text-sm font-medium"
                   style={{
                     backgroundColor: newName.trim() ? 'var(--accent)' : 'var(--bg-tertiary)',
-                    color: newName.trim() ? 'var(--bg-primary)' : 'var(--text-tertiary)'
+                    color: newName.trim() ? 'var(--bg-primary)' : 'var(--text-tertiary)',
                   }}
                 >
                   创建

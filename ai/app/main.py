@@ -1,7 +1,12 @@
+import os
+import atexit
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .core.config import settings
-from .routers import chat, models, embeddings
+from .routers import chat, models, embeddings, rag
+
+PORT_FILE = Path(__file__).parent.parent.parent / "data" / "ai-port"
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -19,6 +24,14 @@ app.add_middleware(
 app.include_router(chat.router)
 app.include_router(models.router)
 app.include_router(embeddings.router)
+app.include_router(rag.router)
+
+
+@app.on_event("startup")
+async def startup_event():
+    PORT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    PORT_FILE.write_text(str(settings.PORT))
+    atexit.register(lambda: PORT_FILE.unlink(missing_ok=True))
 
 
 @app.get("/health")

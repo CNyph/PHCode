@@ -8,8 +8,10 @@ import { STORAGE_KEYS } from '../types/api'
 import type { Message } from '../types/api'
 import MarkdownRenderer from './chat/MarkdownRenderer'
 import MessageActions from './chat/MessageActions'
+import BranchSelector from './chat/BranchSelector'
 import ImagePreview from './chat/ImagePreview'
 import Avatar from './Avatar'
+import { getCurrentUserId, getScopedStorageKey } from '../services/session'
 
 const IMAGE_URL_REGEX = /(https?:\/\/[^\s]+\.(jpg|jpeg|png|gif|webp|svg))/gi
 const SCROLL_THRESHOLD = 100
@@ -22,7 +24,9 @@ function extractImageUrls(content: string): string[] {
 
 function getUserSettings() {
   try {
-    const saved = localStorage.getItem(STORAGE_KEYS.SETTINGS)
+    const saved = localStorage.getItem(
+      getScopedStorageKey(STORAGE_KEYS.SETTINGS, getCurrentUserId()),
+    )
     if (saved) {
       const data = JSON.parse(saved)
       return { userName: data.userName || '', userAvatar: data.userAvatar || '' }
@@ -63,7 +67,7 @@ const MessageItem = memo(function MessageItem({
   onSaveEdit,
   onEditContentChange,
   onRegenerate,
-  userSettings
+  userSettings,
 }: MessageItemProps) {
   if ((message.role as string) === 'error') {
     return (
@@ -79,7 +83,7 @@ const MessageItem = memo(function MessageItem({
           className="max-w-[75%] rounded-2xl rounded-bl-md px-4 py-3"
           style={{
             backgroundColor: '#7f1d1d',
-            color: '#fca5a5'
+            color: '#fca5a5',
           }}
         >
           <div className="flex items-center gap-2 text-sm">
@@ -130,7 +134,7 @@ const MessageItem = memo(function MessageItem({
                 className="px-3 py-1 rounded text-xs"
                 style={{
                   backgroundColor: 'var(--accent)',
-                  color: 'var(--bg-primary)'
+                  color: 'var(--bg-primary)',
                 }}
               >
                 保存
@@ -144,7 +148,7 @@ const MessageItem = memo(function MessageItem({
             }`}
             style={{
               backgroundColor: message.role === 'user' ? 'var(--accent)' : 'var(--bg-secondary)',
-              color: message.role === 'user' ? 'var(--bg-primary)' : 'var(--text-primary)'
+              color: message.role === 'user' ? 'var(--bg-primary)' : 'var(--text-primary)',
             }}
           >
             {message.role === 'user' ? (
@@ -165,14 +169,18 @@ const MessageItem = memo(function MessageItem({
             )}
             <div className="flex items-center justify-between mt-1">
               <span className="text-[10px] opacity-50">{formatTime(message.created_at)}</span>
-            <MessageActions
-              content={message.content}
-              role={message.role as 'user' | 'assistant'}
-              messageId={message.role === 'assistant' ? message.id : undefined}
-              feedback={(message as unknown as { feedback?: string | null }).feedback}
-              onEdit={message.role === 'user' ? () => onEdit(message.id, message.content) : undefined}
-              onRegenerate={message.role === 'assistant' ? () => onRegenerate(message.id) : undefined}
-            />
+              <MessageActions
+                content={message.content}
+                role={message.role as 'user' | 'assistant'}
+                messageId={message.role === 'assistant' ? message.id : undefined}
+                feedback={(message as unknown as { feedback?: string | null }).feedback}
+                onEdit={
+                  message.role === 'user' ? () => onEdit(message.id, message.content) : undefined
+                }
+                onRegenerate={
+                  message.role === 'assistant' ? () => onRegenerate(message.id) : undefined
+                }
+              />
             </div>
           </div>
         )}
@@ -242,11 +250,19 @@ export default function ChatArea() {
     if (editingMessageId && editingContent.trim()) {
       try {
         await messageApi.update(editingMessageId, editingContent.trim())
-        const messageIndex = messages.findIndex(m => m.id === editingMessageId)
+        const messageIndex = messages.findIndex((m) => m.id === editingMessageId)
         if (messageIndex >= 0) {
           const updatedMessages = [...messages]
-          updatedMessages[messageIndex] = { ...updatedMessages[messageIndex], content: editingContent.trim() }
+          updatedMessages[messageIndex] = {
+            ...updatedMessages[messageIndex],
+            content: editingContent.trim(),
+          }
           useConversationStore.setState({ messages: updatedMessages })
+
+          const { createBranch } = useConversationStore.getState()
+          createBranch(editingMessageId)
+          const { sendMessage } = useChatStore.getState()
+          await sendMessage(editingContent.trim())
         }
       } catch (error) {
         console.error('Failed to save edit:', error)
@@ -256,16 +272,21 @@ export default function ChatArea() {
     }
   }, [editingMessageId, editingContent, messages])
 
-  const handleRegenerate = useCallback(async (messageId: string) => {
-    const messageIndex = messages.findIndex(m => m.id === messageId)
-    if (messageIndex > 0) {
-      const previousUserMessage = messages[messageIndex - 1]
-      if (previousUserMessage.role === 'user') {
-        const { sendMessage } = useChatStore.getState()
-        await sendMessage(previousUserMessage.content)
+  const handleRegenerate = useCallback(
+    async (messageId: string) => {
+      const messageIndex = messages.findIndex((m) => m.id === messageId)
+      if (messageIndex > 0) {
+        const previousUserMessage = messages[messageIndex - 1]
+        if (previousUserMessage.role === 'user') {
+          const { createBranch } = useConversationStore.getState()
+          createBranch(messageId)
+          const { sendMessage } = useChatStore.getState()
+          await sendMessage(previousUserMessage.content)
+        }
       }
-    }
-  }, [messages])
+    },
+    [messages],
+  )
 
   const handleEditContentChange = useCallback((content: string) => {
     setEditingContent(content)
@@ -320,6 +341,9 @@ export default function ChatArea() {
       style={{ backgroundColor: 'var(--bg-primary)' }}
     >
       <div className="max-w-[840px] mx-auto px-4 py-6 space-y-6">
+        <div className="flex justify-center">
+          <BranchSelector />
+        </div>
         {messages.map((message) => (
           <MessageItem
             key={message.id}
@@ -348,7 +372,7 @@ export default function ChatArea() {
               className="max-w-[75%] rounded-2xl rounded-bl-md px-4 py-3"
               style={{
                 backgroundColor: 'var(--bg-secondary)',
-                color: 'var(--text-primary)'
+                color: 'var(--text-primary)',
               }}
             >
               <div className="text-sm">
@@ -371,10 +395,14 @@ export default function ChatArea() {
               className="max-w-[75%] rounded-2xl rounded-bl-md px-4 py-3"
               style={{
                 backgroundColor: 'var(--bg-secondary)',
-                color: 'var(--text-primary)'
+                color: 'var(--text-primary)',
               }}
             >
-              <Loader2 size={16} className="animate-spin" style={{ color: 'var(--text-tertiary)' }} />
+              <Loader2
+                size={16}
+                className="animate-spin"
+                style={{ color: 'var(--text-tertiary)' }}
+              />
             </div>
           </motion.div>
         )}

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from ..models.schemas import EmbeddingRequest, EmbeddingResponse, EmbeddingData
-from ..services.ollama_service import ollama_service
+from ..services.provider_factory import get_provider
 
 router = APIRouter(prefix="/v1", tags=["embeddings"])
 
@@ -8,7 +8,7 @@ router = APIRouter(prefix="/v1", tags=["embeddings"])
 @router.post("/embeddings")
 async def create_embeddings(request: EmbeddingRequest):
     try:
-        embeddings = await ollama_service.embeddings(
+        embeddings = await get_provider().embeddings(
             model=request.model,
             input=request.input
         )

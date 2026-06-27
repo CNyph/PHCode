@@ -4,10 +4,10 @@ export function exportToJson(conversations: Conversation[], messages: Message[])
   const data = {
     version: '1.0',
     exportedAt: new Date().toISOString(),
-    conversations: conversations.map(conv => ({
+    conversations: conversations.map((conv) => ({
       ...conv,
-      messages: messages.filter(m => m.conversation_id === conv.id)
-    }))
+      messages: messages.filter((m) => m.conversation_id === conv.id),
+    })),
   }
   return JSON.stringify(data, null, 2)
 }
@@ -17,7 +17,7 @@ export function exportToMarkdown(conversations: Conversation[], messages: Messag
   markdown += `导出时间：${new Date().toLocaleString('zh-CN')}\n\n---\n\n`
 
   for (const conv of conversations) {
-    const convMessages = messages.filter(m => m.conversation_id === conv.id)
+    const convMessages = messages.filter((m) => m.conversation_id === conv.id)
     markdown += `## ${conv.title}\n\n`
     markdown += `模型：${conv.model_id || '默认'}\n\n`
 
@@ -44,7 +44,9 @@ export function downloadFile(content: string, filename: string, mimeType: string
   URL.revokeObjectURL(url)
 }
 
-export async function importFromJson(file: File): Promise<{ conversations: Conversation[]; messages: Message[] }> {
+export async function importFromJson(
+  file: File,
+): Promise<{ conversations: Conversation[]; messages: Message[] }> {
   const text = await file.text()
   const data = JSON.parse(text)
 
@@ -63,7 +65,7 @@ export async function importFromJson(file: File): Promise<{ conversations: Conve
       system_prompt: conv.system_prompt || null,
       created_at: conv.created_at,
       updated_at: conv.updated_at,
-      is_deleted: conv.is_deleted || 0
+      is_deleted: conv.is_deleted || 0,
     })
 
     if (conv.messages && Array.isArray(conv.messages)) {
@@ -71,11 +73,13 @@ export async function importFromJson(file: File): Promise<{ conversations: Conve
         messages.push({
           id: msg.id,
           conversation_id: conv.id,
+          parent_message_id: msg.parent_message_id || null,
+          branch_id: msg.branch_id || 'main',
           role: msg.role,
           content: msg.content,
           model_id: msg.model_id || null,
           tokens_used: msg.tokens_used || 0,
-          created_at: msg.created_at
+          created_at: msg.created_at,
         })
       }
     }

@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { Pencil, RefreshCw, ThumbsUp, ThumbsDown } from 'lucide-react'
 import CopyButton from '../ui/CopyButton'
-
-const API_BASE = 'http://localhost:3000'
+import { authFetch } from '../../services/api'
 
 interface MessageActionsProps {
   content: string
@@ -13,7 +12,14 @@ interface MessageActionsProps {
   onRegenerate?: () => void
 }
 
-export default function MessageActions({ content, role, messageId, feedback, onEdit, onRegenerate }: MessageActionsProps) {
+export default function MessageActions({
+  content,
+  role,
+  messageId,
+  feedback,
+  onEdit,
+  onRegenerate,
+}: MessageActionsProps) {
   const [currentFeedback, setCurrentFeedback] = useState<string | null>(feedback || null)
   const actionStyle = { color: 'var(--text-tertiary)', backgroundColor: 'transparent' }
   const actionHoverStyle = { color: 'var(--text-primary)', backgroundColor: 'var(--bg-hover)' }
@@ -22,10 +28,10 @@ export default function MessageActions({ content, role, messageId, feedback, onE
     if (!messageId) return
     const newFeedback = currentFeedback === type ? null : type
     try {
-      await fetch(`${API_BASE}/api/messages/${messageId}/feedback`, {
+      await authFetch(`http://localhost:3000/api/messages/${messageId}/feedback`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ feedback: newFeedback })
+        body: JSON.stringify({ feedback: newFeedback }),
       })
       setCurrentFeedback(newFeedback)
     } catch (err) {
@@ -72,9 +78,18 @@ export default function MessageActions({ content, role, messageId, feedback, onE
           <button
             onClick={() => handleFeedback('positive')}
             className="p-1 rounded text-xs transition-colors"
-            style={currentFeedback === 'positive' ? { color: '#22c55e', backgroundColor: 'var(--bg-hover)' } : actionStyle}
-            onMouseEnter={(e) => { if (currentFeedback !== 'positive') Object.assign(e.currentTarget.style, actionHoverStyle) }}
-            onMouseLeave={(e) => { if (currentFeedback !== 'positive') Object.assign(e.currentTarget.style, actionStyle) }}
+            style={
+              currentFeedback === 'positive'
+                ? { color: '#22c55e', backgroundColor: 'var(--bg-hover)' }
+                : actionStyle
+            }
+            onMouseEnter={(e) => {
+              if (currentFeedback !== 'positive')
+                Object.assign(e.currentTarget.style, actionHoverStyle)
+            }}
+            onMouseLeave={(e) => {
+              if (currentFeedback !== 'positive') Object.assign(e.currentTarget.style, actionStyle)
+            }}
             title="有帮助"
           >
             <ThumbsUp size={12} />
@@ -82,9 +97,18 @@ export default function MessageActions({ content, role, messageId, feedback, onE
           <button
             onClick={() => handleFeedback('negative')}
             className="p-1 rounded text-xs transition-colors"
-            style={currentFeedback === 'negative' ? { color: '#ef4444', backgroundColor: 'var(--bg-hover)' } : actionStyle}
-            onMouseEnter={(e) => { if (currentFeedback !== 'negative') Object.assign(e.currentTarget.style, actionHoverStyle) }}
-            onMouseLeave={(e) => { if (currentFeedback !== 'negative') Object.assign(e.currentTarget.style, actionStyle) }}
+            style={
+              currentFeedback === 'negative'
+                ? { color: '#ef4444', backgroundColor: 'var(--bg-hover)' }
+                : actionStyle
+            }
+            onMouseEnter={(e) => {
+              if (currentFeedback !== 'negative')
+                Object.assign(e.currentTarget.style, actionHoverStyle)
+            }}
+            onMouseLeave={(e) => {
+              if (currentFeedback !== 'negative') Object.assign(e.currentTarget.style, actionStyle)
+            }}
             title="无帮助"
           >
             <ThumbsDown size={12} />

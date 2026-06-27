@@ -3,52 +3,164 @@ import { chatApi } from '../services/api'
 import { useConversationStore } from './conversationStore'
 import { STORAGE_KEYS, DEFAULT_MODEL } from '../types/api'
 import type { Message } from '../types/api'
+import { getCurrentUserId, getScopedStorageKey } from '../services/session'
 
-function loadSettings(): { selectedModel: string } {
+function loadSettings(): { selectedModel: string; webSearchEnabled: boolean } {
   try {
-    const saved = localStorage.getItem(STORAGE_KEYS.SETTINGS)
+    const userId = getCurrentUserId()
+    const saved = localStorage.getItem(getScopedStorageKey(STORAGE_KEYS.SETTINGS, userId))
     if (saved) {
       const data = JSON.parse(saved)
-      return { selectedModel: data.selectedModel || DEFAULT_MODEL }
+      return {
+        selectedModel: data.selectedModel || DEFAULT_MODEL,
+        webSearchEnabled: Boolean(data.webSearchEnabled),
+      }
     }
   } catch {
     // Ignore parse errors
   }
-  return { selectedModel: DEFAULT_MODEL }
+  return { selectedModel: DEFAULT_MODEL, webSearchEnabled: false }
 }
 
-function saveModelToSettings(modelId: string) {
+function saveSettings(patch: Partial<{ selectedModel: string; webSearchEnabled: boolean }>) {
   try {
-    const saved = localStorage.getItem(STORAGE_KEYS.SETTINGS)
+    const userId = getCurrentUserId()
+    const key = getScopedStorageKey(STORAGE_KEYS.SETTINGS, userId)
+    const saved = localStorage.getItem(key)
     const data = saved ? JSON.parse(saved) : {}
-    data.selectedModel = modelId
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(data))
+    Object.assign(data, patch)
+    localStorage.setItem(key, JSON.stringify(data))
   } catch {
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify({ selectedModel: modelId }))
+    const userId = getCurrentUserId()
+    const key = getScopedStorageKey(STORAGE_KEYS.SETTINGS, userId)
+    localStorage.setItem(key, JSON.stringify(patch))
   }
+}
+
+function createAssistantErrorMessage(conversationId: string, content: string): Message {
+  return {
+    id: `error-${Date.now()}`,
+    conversation_id: conversationId,
+    parent_message_id: null,
+    branch_id: 'main',
+    role: 'assistant',
+    content,
+    model_id: null,
+    tokens_used: 0,
+    created_at: new Date().toISOString(),
+  }
+}
+
+function buildNoContentMessage(): string {
+  return '模型未返回内容，请确认 Ollama 正在正常运行且所选模型支持对话'
 }
 
 const initialSettings = loadSettings()
 
 interface ChatState {
   selectedModel: string | null
+  selectedKnowledgeBase: string | null
+  webSearchEnabled: boolean
   isStreaming: boolean
   streamingContent: string
   abortController: AbortController | null
+  lastUserMessage: string | null
   setSelectedModel: (modelId: string) => void
+  setSelectedKnowledgeBase: (kbId: string | null) => void
+  setWebSearchEnabled: (enabled: boolean) => void
+  reloadSelectedModel: () => void
   stopStreaming: () => void
   sendMessage: (content: string) => Promise<void>
+  continueGeneration: () => Promise<void>
+}
+
+async function streamAssistantReply(params: {
+  conversationId: string
+  prompt: string
+  modelId: string | undefined
+  knowledgeBaseId?: string | null
+  webSearchEnabled?: boolean
+}) {
+  const { conversationId, prompt, modelId, knowledgeBaseId, webSearchEnabled } = params
+  const controller = new AbortController()
+
+  useChatStore.setState({
+    isStreaming: true,
+    streamingContent: '',
+    abortController: controller,
+  })
+
+  let assistantContent = ''
+  let streamError = ''
+
+  try {
+    const stream = chatApi.stream(
+      conversationId,
+      prompt,
+      modelId,
+      controller.signal,
+      knowledgeBaseId || undefined,
+      webSearchEnabled,
+    )
+
+    for await (const chunk of stream) {
+      if (controller.signal.aborted) break
+
+      if (chunk.error) {
+        streamError = chunk.error
+      } else if (chunk.content) {
+        assistantContent += chunk.content
+        useChatStore.setState({ streamingContent: assistantContent })
+      }
+    }
+
+    if (!assistantContent && !streamError && !controller.signal.aborted) {
+      streamError = buildNoContentMessage()
+    }
+
+    return {
+      assistantContent,
+      streamError,
+      aborted: controller.signal.aborted,
+    }
+  } finally {
+    useChatStore.setState({
+      isStreaming: false,
+      streamingContent: '',
+      abortController: null,
+    })
+  }
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
   selectedModel: initialSettings.selectedModel,
+  selectedKnowledgeBase: null,
+  webSearchEnabled: initialSettings.webSearchEnabled,
   isStreaming: false,
   streamingContent: '',
   abortController: null,
+  lastUserMessage: null,
 
   setSelectedModel: (modelId: string) => {
     set({ selectedModel: modelId })
-    saveModelToSettings(modelId)
+    saveSettings({ selectedModel: modelId })
+  },
+
+  setSelectedKnowledgeBase: (kbId: string | null) => {
+    set({ selectedKnowledgeBase: kbId })
+  },
+
+  setWebSearchEnabled: (enabled: boolean) => {
+    set({ webSearchEnabled: enabled })
+    saveSettings({ webSearchEnabled: enabled })
+  },
+
+  reloadSelectedModel: () => {
+    const settings = loadSettings()
+    set({
+      selectedModel: settings.selectedModel,
+      webSearchEnabled: settings.webSearchEnabled,
+    })
   },
 
   stopStreaming: () => {
@@ -56,18 +168,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (abortController) {
       abortController.abort()
     }
-    set({ isStreaming: false, streamingContent: '', abortController: null })
+    set({ isStreaming: false, abortController: null })
   },
 
   sendMessage: async (content: string) => {
-    const { selectedModel } = get()
+    const { selectedModel, selectedKnowledgeBase, webSearchEnabled } = get()
     const conversationStore = useConversationStore.getState()
     let conversation = conversationStore.currentConversation
 
     const messageCount = conversationStore.messages.length
 
     if (!conversation) {
-      conversation = await conversationStore.createConversation(undefined, selectedModel || undefined)
+      conversation = await conversationStore.createConversation(
+        undefined,
+        selectedModel || undefined,
+      )
     }
 
     await conversationStore.addMessage(conversation.id, {
@@ -75,7 +190,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       role: 'user',
       content,
       model_id: selectedModel || conversation.model_id,
-      tokens_used: 0
+      tokens_used: 0,
     })
 
     if (messageCount === 0) {
@@ -83,72 +198,115 @@ export const useChatStore = create<ChatState>((set, get) => ({
       await conversationStore.updateConversation(conversation.id, { title })
     }
 
-    const controller = new AbortController()
-    set({ isStreaming: true, streamingContent: '', abortController: controller })
-
-    let assistantContent = ''
+    set({
+      isStreaming: true,
+      streamingContent: '',
+      lastUserMessage: content,
+    })
 
     try {
-      const stream = chatApi.stream(
-        conversation.id,
-        content,
-        selectedModel || conversation.model_id || undefined,
-        controller.signal
-      )
+      const result = await streamAssistantReply({
+        conversationId: conversation.id,
+        prompt: content,
+        modelId: selectedModel || conversation.model_id || undefined,
+        knowledgeBaseId: selectedKnowledgeBase,
+        webSearchEnabled,
+      })
 
-      for await (const chunk of stream) {
-        if (controller.signal.aborted) break
-        if (chunk.content) {
-          assistantContent += chunk.content
-          set({ streamingContent: assistantContent })
-        }
-      }
+      if (result.aborted) return
 
-      if (assistantContent && !controller.signal.aborted) {
+      if (result.assistantContent) {
         await conversationStore.addMessage(conversation.id, {
           conversation_id: conversation.id,
           role: 'assistant',
-          content: assistantContent,
+          content: result.assistantContent,
           model_id: selectedModel || conversation.model_id,
-          tokens_used: 0
-        })
-      } else if (!assistantContent && !controller.signal.aborted) {
-        const errorId = 'error-' + Date.now()
-        const errorMsg: Message = {
-          id: errorId,
-          conversation_id: conversation.id,
-          role: 'assistant' as Message['role'],
-          content: 'AI 未返回任何内容。请确认 Ollama 正在运行且模型已安装。',
-          model_id: null,
           tokens_used: 0,
-          created_at: new Date().toISOString()
-        }
-        useConversationStore.setState(state => ({
-          messages: [...state.messages, errorMsg]
+        })
+        return
+      }
+
+      if (result.streamError) {
+        useConversationStore.setState((state) => ({
+          messages: [
+            ...state.messages,
+            createAssistantErrorMessage(conversation.id, result.streamError),
+          ],
         }))
       }
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         console.log('Stream aborted by user')
-      } else {
-        console.error('Stream error:', error)
-        const errorMessage = error instanceof Error ? error.message : '未知错误'
-        const errorId = 'error-' + Date.now()
-        const errorMsg: Message = {
-          id: errorId,
+        return
+      }
+
+      console.error('Stream error:', error)
+      const errorMessage = error instanceof Error ? error.message : '未知错误'
+      useConversationStore.setState((state) => ({
+        messages: [
+          ...state.messages,
+          createAssistantErrorMessage(conversation.id, `请求失败：${errorMessage}`),
+        ],
+      }))
+    } finally {
+      set({
+        isStreaming: false,
+        streamingContent: '',
+        abortController: null,
+      })
+    }
+  },
+
+  continueGeneration: async () => {
+    const { selectedModel, lastUserMessage, streamingContent } = get()
+    if (!lastUserMessage) return
+
+    const conversationStore = useConversationStore.getState()
+    const conversation = conversationStore.currentConversation
+    if (!conversation) return
+
+    const continuationPrompt = `${lastUserMessage}\n\n[继续生成上一次未完成的回答，从以下内容接着写：]\n${streamingContent}`
+    set({ isStreaming: true })
+
+    try {
+      const result = await streamAssistantReply({
+        conversationId: conversation.id,
+        prompt: continuationPrompt,
+        modelId: selectedModel || conversation.model_id || undefined,
+      })
+
+      if (result.aborted) return
+
+      if (result.assistantContent) {
+        await conversationStore.addMessage(conversation.id, {
           conversation_id: conversation.id,
-          role: 'error' as Message['role'],
-          content: `请求失败：${errorMessage}`,
-          model_id: null,
+          role: 'assistant',
+          content: result.assistantContent,
+          model_id: selectedModel || conversation.model_id,
           tokens_used: 0,
-          created_at: new Date().toISOString()
-        }
-        useConversationStore.setState(state => ({
-          messages: [...state.messages, errorMsg]
+        })
+        return
+      }
+
+      if (result.streamError) {
+        useConversationStore.setState((state) => ({
+          messages: [
+            ...state.messages,
+            createAssistantErrorMessage(conversation.id, result.streamError),
+          ],
         }))
       }
+    } catch (error) {
+      if (error instanceof Error && error.name !== 'AbortError') {
+        console.error('Continue generation error:', error)
+      }
     } finally {
-      set({ isStreaming: false, streamingContent: '', abortController: null })
+      set({
+        isStreaming: false,
+        streamingContent: '',
+        abortController: null,
+        lastUserMessage: null,
+      })
     }
-  }
+  },
 }))

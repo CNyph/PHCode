@@ -8,7 +8,7 @@ class Message(BaseModel):
 
 
 class ChatCompletionRequest(BaseModel):
-    model: str = "llama3.2"
+    model: str = "qwen2.5:0.5b"
     messages: list[Message]
     stream: bool = False
     temperature: float = 0.7
@@ -46,6 +46,7 @@ class ModelInfo(BaseModel):
 class ModelListResponse(BaseModel):
     object: str = "list"
     data: list[ModelInfo]
+    resolved_ollama_url: str | None = None
 
 
 class EmbeddingRequest(BaseModel):

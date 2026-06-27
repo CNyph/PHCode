@@ -1,86 +1,24 @@
-const { app, BrowserWindow, ipcMain, Menu, globalShortcut, shell } = require('electron')
+const { app, BrowserWindow, Menu, globalShortcut, shell } = require('electron')
 const path = require('path')
-const { spawn } = require('child_process')
-
-let mainWindow
-let serverProcess = null
-let aiProcess = null
+const { startServer, stopServer } = require('./services/server.cjs')
+const { startAIService, stopAIService } = require('./services/ai.cjs')
+const { getAvailablePort, saveAIPort } = require('./utils/port.cjs')
+const { registerIPC } = require('./ipc/index.cjs')
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 
-function startServer() {
-  if (!isDev) return
-
-  const serverDir = path.join(__dirname, '..', 'server')
-  serverProcess = spawn('npm', ['run', 'dev'], {
-    cwd: serverDir,
-    shell: true,
-    stdio: 'pipe'
-  })
-
-  serverProcess.stdout?.on('data', (data) => {
-    console.log(`[Server] ${data.toString().trim()}`)
-  })
-
-  serverProcess.stderr?.on('data', (data) => {
-    console.error(`[Server Error] ${data.toString().trim()}`)
-  })
-
-  serverProcess.on('error', (err) => {
-    console.error('[Server] Failed to start:', err)
-  })
-}
-
-function startAIService() {
-  if (!isDev) return
-
-  const aiDir = path.join(__dirname, '..', 'ai')
-  aiProcess = spawn('python', ['-m', 'uvicorn', 'app.main:app', '--reload', '--port', '8000'], {
-    cwd: aiDir,
-    shell: true,
-    stdio: 'pipe'
-  })
-
-  aiProcess.stdout?.on('data', (data) => {
-    console.log(`[AI] ${data.toString().trim()}`)
-  })
-
-  aiProcess.stderr?.on('data', (data) => {
-    console.error(`[AI Error] ${data.toString().trim()}`)
-  })
-
-  aiProcess.on('error', (err) => {
-    console.error('[AI] Failed to start:', err)
-  })
-}
-
-function stopServices() {
-  if (serverProcess) {
-    serverProcess.kill()
-    serverProcess = null
-  }
-  if (aiProcess) {
-    aiProcess.kill()
-    aiProcess = null
-  }
-}
+let mainWindow = null
 
 function createMenu() {
+  const send = (channel) => () => mainWindow?.webContents.send(channel)
+
   const template = [
     {
       label: 'File',
       submenu: [
-        {
-          label: 'New Chat',
-          accelerator: 'CmdOrCtrl+N',
-          click: () => mainWindow?.webContents.send('menu:new-chat')
-        },
+        { label: 'New Chat', accelerator: 'CmdOrCtrl+N', click: send('menu:new-chat') },
         { type: 'separator' },
-        {
-          label: 'Settings',
-          accelerator: 'CmdOrCtrl+,',
-          click: () => mainWindow?.webContents.send('menu:open-settings')
-        },
+        { label: 'Settings', accelerator: 'CmdOrCtrl+,', click: send('menu:open-settings') },
         { type: 'separator' },
         { role: 'quit' }
       ]
@@ -100,11 +38,7 @@ function createMenu() {
     {
       label: 'View',
       submenu: [
-        {
-          label: 'Toggle Sidebar',
-          accelerator: 'CmdOrCtrl+B',
-          click: () => mainWindow?.webContents.send('menu:toggle-sidebar')
-        },
+        { label: 'Toggle Sidebar', accelerator: 'CmdOrCtrl+B', click: send('menu:toggle-sidebar') },
         { type: 'separator' },
         { role: 'reload' },
         { role: 'forceReload' },
@@ -128,14 +62,8 @@ function createMenu() {
     {
       label: 'Help',
       submenu: [
-        {
-          label: 'Learn More',
-          click: () => shell.openExternal('https://github.com')
-        },
-        {
-          label: 'Report Issue',
-          click: () => shell.openExternal('https://github.com/issues')
-        }
+        { label: 'Learn More', click: () => shell.openExternal('https://github.com') },
+        { label: 'Report Issue', click: () => shell.openExternal('https://github.com/issues') }
       ]
     }
   ]
@@ -151,22 +79,14 @@ function createMenu() {
     })
   }
 
-  const menu = Menu.buildFromTemplate(template)
-  Menu.setApplicationMenu(menu)
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
 
 function registerShortcuts() {
-  globalShortcut.register('CmdOrCtrl+N', () => {
-    mainWindow?.webContents.send('menu:new-chat')
-  })
-
-  globalShortcut.register('CmdOrCtrl+B', () => {
-    mainWindow?.webContents.send('menu:toggle-sidebar')
-  })
-
-  globalShortcut.register('CmdOrCtrl+,', () => {
-    mainWindow?.webContents.send('menu:open-settings')
-  })
+  const send = (channel) => () => mainWindow?.webContents.send(channel)
+  globalShortcut.register('CmdOrCtrl+N', send('menu:new-chat'))
+  globalShortcut.register('CmdOrCtrl+B', send('menu:toggle-sidebar'))
+  globalShortcut.register('CmdOrCtrl+,', send('menu:open-settings'))
 }
 
 function createWindow() {
@@ -182,7 +102,8 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
-    },
+      sandbox: true
+    }
   })
 
   if (isDev) {
@@ -191,6 +112,8 @@ function createWindow() {
   } else {
     mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
   }
+
+  registerIPC(mainWindow)
 }
 
 async function waitForServer(url, maxAttempts = 30, interval = 1000) {
@@ -204,9 +127,21 @@ async function waitForServer(url, maxAttempts = 30, interval = 1000) {
   return false
 }
 
+async function stopAllServices() {
+  await stopServer()
+  stopAIService()
+}
+
 app.whenReady().then(async () => {
-  startServer()
-  startAIService()
+  let aiPort = null
+  if (isDev) {
+    aiPort = await getAvailablePort()
+    saveAIPort(aiPort)
+    console.log(`[Electron] AI service will use port ${aiPort}`)
+  }
+
+  startAIService(isDev, aiPort)
+  await startServer(isDev, aiPort)
 
   const serverReady = await waitForServer('http://localhost:3000/api/health')
   if (!serverReady) {
@@ -227,7 +162,7 @@ app.whenReady().then(async () => {
 })
 
 app.on('window-all-closed', () => {
-  stopServices()
+  void stopAllServices()
   if (process.platform !== 'darwin') {
     app.quit()
   }
@@ -235,21 +170,5 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   globalShortcut.unregisterAll()
-  stopServices()
-})
-
-ipcMain.on('window:minimize', () => {
-  mainWindow?.minimize()
-})
-
-ipcMain.on('window:maximize', () => {
-  if (mainWindow?.isMaximized()) {
-    mainWindow.unmaximize()
-  } else {
-    mainWindow?.maximize()
-  }
-})
-
-ipcMain.on('window:close', () => {
-  mainWindow?.close()
+  void stopAllServices()
 })

@@ -1,12 +1,23 @@
 import { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, Save, Loader2, CheckCircle, XCircle, BookOpen, User } from 'lucide-react'
+import {
+  ArrowLeft,
+  Save,
+  Loader2,
+  CheckCircle,
+  XCircle,
+  BookOpen,
+  User,
+  Sparkles,
+} from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
 import { chatApi } from '../services/api'
 import { STORAGE_KEYS, DEFAULT_MODEL } from '../types/api'
 import type { ModelInfo } from '../types/api'
 import KnowledgeBasePage from './KnowledgeBasePage'
+import PromptLibraryPage from './PromptLibraryPage'
 import Avatar from '../components/Avatar'
 import { useChatStore } from '../stores/chatStore'
+import { getCurrentUserId, getScopedStorageKey } from '../services/session'
 
 interface SettingsData {
   defaultModel: string
@@ -19,7 +30,9 @@ interface SettingsData {
 
 function loadSettings(): SettingsData {
   try {
-    const saved = localStorage.getItem(STORAGE_KEYS.SETTINGS)
+    const saved = localStorage.getItem(
+      getScopedStorageKey(STORAGE_KEYS.SETTINGS, getCurrentUserId()),
+    )
     if (saved) {
       return { ...defaultSettings, ...JSON.parse(saved) }
     }
@@ -31,24 +44,27 @@ function loadSettings(): SettingsData {
 
 const defaultSettings: SettingsData = {
   defaultModel: DEFAULT_MODEL,
-  ollamaUrl: 'http://localhost:11434',
+  ollamaUrl: '',
   serverUrl: 'http://localhost:3000',
   aiServiceUrl: 'http://localhost:8000',
   userName: '',
-  userAvatar: ''
+  userAvatar: '',
 }
 
 interface SettingsPageProps {
   onBack: () => void
 }
 
-type Tab = 'general' | 'models' | 'knowledge' | 'about'
+type Tab = 'general' | 'models' | 'prompts' | 'knowledge' | 'about'
 
 export default function SettingsPage({ onBack }: SettingsPageProps) {
   const [activeTab, setActiveTab] = useState<Tab>('general')
   const { theme, setTheme } = useTheme()
   const [models, setModels] = useState<ModelInfo[]>([])
-  const [ollamaStatus, setOllamaStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking')
+  const [detectedOllamaUrl, setDetectedOllamaUrl] = useState('')
+  const [ollamaStatus, setOllamaStatus] = useState<'checking' | 'connected' | 'disconnected'>(
+    'checking',
+  )
   const [isSaving, setIsSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState('')
 
@@ -59,12 +75,11 @@ export default function SettingsPage({ onBack }: SettingsPageProps) {
   const checkOllamaConnection = async () => {
     setOllamaStatus('checking')
     try {
-      const url = settings.ollamaUrl.replace(/\/+$/, '') + '/api/tags'
-      const response = await fetch(url, {
-        signal: AbortSignal.timeout(5000)
-      })
-      setOllamaStatus(response.ok ? 'connected' : 'disconnected')
+      const response = await chatApi.getModels()
+      setDetectedOllamaUrl(response.resolved_ollama_url || settings.ollamaUrl || '')
+      setOllamaStatus(response.data && response.data.length > 0 ? 'connected' : 'disconnected')
     } catch {
+      setDetectedOllamaUrl('')
       setOllamaStatus('disconnected')
     }
   }
@@ -73,6 +88,7 @@ export default function SettingsPage({ onBack }: SettingsPageProps) {
     try {
       const response = await chatApi.getModels()
       setModels(response.data)
+      setDetectedOllamaUrl(response.resolved_ollama_url || settings.ollamaUrl || '')
     } catch {
       console.error('Failed to fetch models')
     }
@@ -90,13 +106,11 @@ export default function SettingsPage({ onBack }: SettingsPageProps) {
     setIsSaving(true)
     setSaveMessage('')
     try {
-      localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings))
+      localStorage.setItem(
+        getScopedStorageKey(STORAGE_KEYS.SETTINGS, getCurrentUserId()),
+        JSON.stringify(settings),
+      )
       setSelectedModel(settings.defaultModel)
-      await fetch(`${settings.serverUrl}/api/settings/defaultModel`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ value: settings.defaultModel })
-      })
       setSaveMessage('设置保存成功')
       setTimeout(() => setSaveMessage(''), 3000)
     } catch {
@@ -106,11 +120,12 @@ export default function SettingsPage({ onBack }: SettingsPageProps) {
     }
   }
 
-  const tabs: { id: Tab; label: string }[] = [
-    { id: 'general', label: '通用' },
-    { id: 'models', label: '模型' },
-    { id: 'knowledge', label: '知识库' },
-    { id: 'about', label: '关于' }
+  const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
+    { id: 'general', label: '通用', icon: <User size={14} /> },
+    { id: 'models', label: '模型', icon: <BookOpen size={14} /> },
+    { id: 'prompts', label: 'Prompts', icon: <Sparkles size={14} /> },
+    { id: 'knowledge', label: '知识库', icon: <BookOpen size={14} /> },
+    { id: 'about', label: '关于', icon: <BookOpen size={14} /> },
   ]
 
   return (
@@ -141,14 +156,14 @@ export default function SettingsPage({ onBack }: SettingsPageProps) {
           className="w-48 flex flex-col p-2 gap-1"
           style={{ borderRight: '1px solid var(--border-color)' }}
         >
-          {tabs.map(tab => (
+          {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left transition-colors"
               style={{
                 backgroundColor: activeTab === tab.id ? 'var(--bg-active)' : 'transparent',
-                color: activeTab === tab.id ? 'var(--text-primary)' : 'var(--text-secondary)'
+                color: activeTab === tab.id ? 'var(--text-primary)' : 'var(--text-secondary)',
               }}
               onMouseEnter={(e) => {
                 if (activeTab !== tab.id) e.currentTarget.style.backgroundColor = 'var(--bg-hover)'
@@ -157,7 +172,7 @@ export default function SettingsPage({ onBack }: SettingsPageProps) {
                 if (activeTab !== tab.id) e.currentTarget.style.backgroundColor = 'transparent'
               }}
             >
-              {tab.id === 'knowledge' && <BookOpen size={14} />}
+              {tab.icon}
               {tab.label}
             </button>
           ))}
@@ -185,7 +200,10 @@ export default function SettingsPage({ onBack }: SettingsPageProps) {
                         if (file) {
                           const reader = new FileReader()
                           reader.onload = (ev) => {
-                            setSettings(prev => ({ ...prev, userAvatar: ev.target?.result as string }))
+                            setSettings((prev) => ({
+                              ...prev,
+                              userAvatar: ev.target?.result as string,
+                            }))
                           }
                           reader.readAsDataURL(file)
                         }
@@ -196,24 +214,29 @@ export default function SettingsPage({ onBack }: SettingsPageProps) {
                       className="absolute bottom-0 right-0 p-1 rounded-full"
                       style={{
                         backgroundColor: 'var(--bg-tertiary)',
-                        color: 'var(--text-secondary)'
+                        color: 'var(--text-secondary)',
                       }}
                     >
                       <User size={12} />
                     </button>
                   </div>
                   <div className="flex-1">
-                    <label className="block text-sm mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+                    <label
+                      className="block text-sm mb-1.5"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
                       用户名
                     </label>
                     <input
                       value={settings.userName}
-                      onChange={(e) => setSettings(prev => ({ ...prev, userName: e.target.value }))}
+                      onChange={(e) =>
+                        setSettings((prev) => ({ ...prev, userName: e.target.value }))
+                      }
                       className="w-full px-3 py-1.5 rounded-lg text-sm outline-none"
                       style={{
                         backgroundColor: 'var(--input-bg)',
                         border: '1px solid var(--input-border)',
-                        color: 'var(--text-primary)'
+                        color: 'var(--text-primary)',
                       }}
                       placeholder="输入用户名"
                     />
@@ -231,7 +254,7 @@ export default function SettingsPage({ onBack }: SettingsPageProps) {
                     style={{
                       backgroundColor: 'var(--input-bg)',
                       border: '1px solid var(--input-border)',
-                      color: 'var(--text-primary)'
+                      color: 'var(--text-primary)',
                     }}
                   >
                     <option value="dark">深色</option>
@@ -245,17 +268,21 @@ export default function SettingsPage({ onBack }: SettingsPageProps) {
                   <Label>新对话默认模型</Label>
                   <select
                     value={settings.defaultModel}
-                    onChange={(e) => setSettings(prev => ({ ...prev, defaultModel: e.target.value }))}
+                    onChange={(e) =>
+                      setSettings((prev) => ({ ...prev, defaultModel: e.target.value }))
+                    }
                     className="px-3 py-1.5 rounded-lg text-sm outline-none max-w-[200px]"
                     style={{
                       backgroundColor: 'var(--input-bg)',
                       border: '1px solid var(--input-border)',
-                      color: 'var(--text-primary)'
+                      color: 'var(--text-primary)',
                     }}
                   >
                     {models.length > 0 ? (
-                      models.map(model => (
-                        <option key={model.id} value={model.id}>{model.id}</option>
+                      models.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.id}
+                        </option>
                       ))
                     ) : (
                       <option value="llama3.2">llama3.2</option>
@@ -270,7 +297,11 @@ export default function SettingsPage({ onBack }: SettingsPageProps) {
                     <Label>Ollama 状态</Label>
                     <div className="flex items-center gap-2">
                       {ollamaStatus === 'checking' && (
-                        <Loader2 size={16} className="animate-spin" style={{ color: 'var(--text-tertiary)' }} />
+                        <Loader2
+                          size={16}
+                          className="animate-spin"
+                          style={{ color: 'var(--text-tertiary)' }}
+                        />
                       )}
                       {ollamaStatus === 'connected' && (
                         <div className="flex items-center gap-1.5" style={{ color: '#22c55e' }}>
@@ -295,15 +326,28 @@ export default function SettingsPage({ onBack }: SettingsPageProps) {
                   </div>
 
                   <div className="flex items-center justify-between">
+                    <Label>当前地址</Label>
+                    <span
+                      className="text-sm truncate max-w-[320px]"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      {detectedOllamaUrl || '未探测到'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
                     <Label>Ollama 地址</Label>
                     <input
                       value={settings.ollamaUrl}
-                      onChange={(e) => setSettings(prev => ({ ...prev, ollamaUrl: e.target.value }))}
+                      onChange={(e) =>
+                        setSettings((prev) => ({ ...prev, ollamaUrl: e.target.value }))
+                      }
                       className="px-3 py-1.5 rounded-lg text-sm outline-none w-64"
+                      placeholder="留空自动探测"
                       style={{
                         backgroundColor: 'var(--input-bg)',
                         border: '1px solid var(--input-border)',
-                        color: 'var(--text-primary)'
+                        color: 'var(--text-primary)',
                       }}
                     />
                   </div>
@@ -317,18 +361,17 @@ export default function SettingsPage({ onBack }: SettingsPageProps) {
                   className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
                   style={{
                     backgroundColor: 'var(--accent)',
-                    color: 'var(--bg-primary)'
+                    color: 'var(--bg-primary)',
                   }}
                 >
-                  {isSaving ? (
-                    <Loader2 size={14} className="animate-spin" />
-                  ) : (
-                    <Save size={14} />
-                  )}
+                  {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                   保存更改
                 </button>
                 {saveMessage && (
-                  <span className="text-sm" style={{ color: saveMessage.includes('成功') ? '#22c55e' : '#ef4444' }}>
+                  <span
+                    className="text-sm"
+                    style={{ color: saveMessage.includes('成功') ? '#22c55e' : '#ef4444' }}
+                  >
                     {saveMessage}
                   </span>
                 )}
@@ -345,17 +388,20 @@ export default function SettingsPage({ onBack }: SettingsPageProps) {
                   </p>
                 ) : (
                   <div className="space-y-2">
-                    {models.map(model => (
+                    {models.map((model) => (
                       <div
                         key={model.id}
                         className="flex items-center justify-between px-4 py-3 rounded-lg"
                         style={{
                           backgroundColor: 'var(--bg-secondary)',
-                          border: '1px solid var(--border-color)'
+                          border: '1px solid var(--border-color)',
                         }}
                       >
                         <div>
-                          <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                          <p
+                            className="text-sm font-medium"
+                            style={{ color: 'var(--text-primary)' }}
+                          >
                             {model.id}
                           </p>
                           <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
@@ -367,7 +413,7 @@ export default function SettingsPage({ onBack }: SettingsPageProps) {
                             className="px-2 py-0.5 rounded text-xs"
                             style={{
                               backgroundColor: 'var(--accent)',
-                              color: 'var(--bg-primary)'
+                              color: 'var(--bg-primary)',
                             }}
                           >
                             默认
@@ -387,7 +433,7 @@ export default function SettingsPage({ onBack }: SettingsPageProps) {
                   className="px-4 py-3 rounded-lg text-sm font-mono"
                   style={{
                     backgroundColor: 'var(--bg-tertiary)',
-                    color: 'var(--text-primary)'
+                    color: 'var(--text-primary)',
                   }}
                 >
                   ollama pull &lt;model-name&gt;
@@ -395,6 +441,8 @@ export default function SettingsPage({ onBack }: SettingsPageProps) {
               </Section>
             </div>
           )}
+
+          {activeTab === 'prompts' && <PromptLibraryPage />}
 
           {activeTab === 'knowledge' && (
             <KnowledgeBasePage onBack={() => setActiveTab('general')} />

@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { requireAuth } from '../middleware/auth.js'
 import {
   getAllConversations,
   getConversationById,
@@ -11,13 +12,15 @@ import { validate, isString } from '../middleware/validate.js'
 
 export const conversationRoutes = Router()
 
-conversationRoutes.get('/', (_req, res) => {
-  const conversations = getAllConversations()
+conversationRoutes.use(requireAuth)
+
+conversationRoutes.get('/', (req, res) => {
+  const conversations = getAllConversations(req.authUser!.id)
   res.json(conversations)
 })
 
 conversationRoutes.get('/:id', (req, res) => {
-  const conversation = getConversationById(req.params.id)
+  const conversation = getConversationById(req.params.id, req.authUser!.id)
   if (!conversation) {
     res.status(404).json({ error: 'Conversation not found' })
     return
@@ -26,12 +29,12 @@ conversationRoutes.get('/:id', (req, res) => {
 })
 
 conversationRoutes.get('/:id/messages', (req, res) => {
-  const conversation = getConversationById(req.params.id)
+  const conversation = getConversationById(req.params.id, req.authUser!.id)
   if (!conversation) {
     res.status(404).json({ error: 'Conversation not found' })
     return
   }
-  const messages = getMessagesByConversationId(req.params.id)
+  const messages = getMessagesByConversationId(req.params.id, undefined, req.authUser!.id)
   res.json(messages)
 })
 
@@ -40,7 +43,7 @@ conversationRoutes.post('/', validate(
   isString('model_id', { maxLength: 100 }),
   isString('system_prompt', { maxLength: 10000 })
 ), (req, res) => {
-  const conversation = createConversation(req.body)
+  const conversation = createConversation(req.body, req.authUser!.id)
   res.status(201).json(conversation)
 })
 
@@ -49,7 +52,7 @@ conversationRoutes.put('/:id', validate(
   isString('model_id', { maxLength: 100 }),
   isString('system_prompt', { maxLength: 10000 })
 ), (req, res) => {
-  const conversation = updateConversation(req.params.id, req.body)
+  const conversation = updateConversation(req.params.id, req.body, req.authUser!.id)
   if (!conversation) {
     res.status(404).json({ error: 'Conversation not found' })
     return
@@ -58,7 +61,7 @@ conversationRoutes.put('/:id', validate(
 })
 
 conversationRoutes.delete('/:id', (req, res) => {
-  const deleted = deleteConversation(req.params.id)
+  const deleted = deleteConversation(req.params.id, req.authUser!.id)
   if (!deleted) {
     res.status(404).json({ error: 'Conversation not found' })
     return

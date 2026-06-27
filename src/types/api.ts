@@ -1,4 +1,6 @@
 export type {
+  AuthUser,
+  AuthResponse,
   Conversation,
   Message,
   MessageRole,
@@ -7,9 +9,16 @@ export type {
   ChatRequest,
   ModelInfo,
   ModelListResponse,
+  PromptTemplate,
   KnowledgeBase,
   KnowledgeDocument,
-  UploadedFile
+  UploadedFile,
 } from '../../shared/types'
 
-export { API_ENDPOINTS, STORAGE_KEYS, TIMEOUTS, LIMITS, DEFAULT_MODEL } from '../../shared/constants'
+export {
+  API_ENDPOINTS,
+  STORAGE_KEYS,
+  TIMEOUTS,
+  LIMITS,
+  DEFAULT_MODEL,
+} from '../../shared/constants'
